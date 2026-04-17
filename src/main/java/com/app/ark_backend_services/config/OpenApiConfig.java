@@ -1,0 +1,35 @@
+package com.app.ark_backend_services.config;
+
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Contact;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class OpenApiConfig {
+
+    @Bean
+    public OpenAPI arkOpenAPI() {
+        return new OpenAPI()
+                .info(new Info()
+                        .title("ARK - Academic Record Keeper API")
+                        .description("Multi-tenant academic records management platform. "
+                                + "Supports 4-tier RBAC: SUPER_ADMIN, ORG_ADMIN, ADMIN, USER. "
+                                + "All endpoints (except Auth) require a valid JWT Bearer token.")
+                        .version("1.0.0")
+                        .contact(new Contact()
+                                .name("ARK Platform")
+                                .email("support@ark-platform.com")))
+                .addSecurityItem(new SecurityRequirement().addList("Bearer Auth"))
+                .components(new Components()
+                        .addSecuritySchemes("Bearer Auth", new SecurityScheme()
+                                .type(SecurityScheme.Type.HTTP)
+                                .scheme("bearer")
+                                .bearerFormat("JWT")
+                                .description("Enter your JWT access token")));
+    }
+}

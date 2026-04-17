@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: ark-backend-services
+  mongodb:
+    uri: mongodb://admin:secret@localhost:27017/ark_web?authSource=admin
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:ark-jwt-secret-key-must-be-at-least-256-bits-long-for-hs256}
+    access-token-expiration: 3600000     # 1 hour
+    refresh-token-expiration: 604800000  # 7 days
