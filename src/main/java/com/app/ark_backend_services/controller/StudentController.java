@@ -59,7 +59,7 @@ public class StudentController {
             @Parameter(description = "Search text: prefix match on name, email and id fields") @RequestParam(required = false) String q,
             @SortDefault(sort = "firstName", direction = Sort.Direction.ASC) Pageable pageable) {
         if (q != null && !q.isBlank()) {
-            return ResponseEntity.ok(studentService.search(organizationId, branchId, q, pageable));
+            return ResponseEntity.ok(studentService.search(organizationId, branchId, classId, q, pageable));
         }
         if (classId != null) {
             return ResponseEntity.ok(studentService.getAllByClass(organizationId, classId, pageable));

@@ -35,6 +35,9 @@ public class StudentResponse {
     private String govtIdNumber;
     private LocalDate enrollmentDate;
     private StudentStatus status;
+    /** Class of the student's ACTIVE enrollment (null if none). Filled by StudentService on reads. */
+    private String activeClassId;
+    private String activeClassName;
     private Instant createdAt;
     private Instant updatedAt;
 

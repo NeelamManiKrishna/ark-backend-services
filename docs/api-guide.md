@@ -64,14 +64,14 @@ Stored encrypted. `USER` sees them masked (`******3456`); everyone else sees the
 
 ## 2. Students and enrollments
 
-A student is a permanent record. The link to a class is an **enrollment** per academic year; `Student` has no `classId`, and student responses carry no current class. To find a student's class use the enrollment endpoints below.
+A student is a permanent record. The link to a class is an **enrollment** per academic year; `Student` has no `classId`. Student read responses carry `activeClassId` and `activeClassName` (e.g. "Grade 1 A"; both null when the student has no ACTIVE enrollment), taken from the ACTIVE enrollment. For history use the enrollment endpoints below.
 
-**Student** fields: `id, arkId, organizationId, branchId, rollNumber, firstName, lastName, email, phone, dateOfBirth, gender, address, city, state, zipCode, guardianName, guardianPhone, guardianEmail, govtIdType, govtIdNumber, enrollmentDate, status, createdAt, updatedAt`. `status`: `ACTIVE, INACTIVE, GRADUATED, TRANSFERRED, DROPPED`.
+**Student** fields: `id, arkId, organizationId, branchId, rollNumber, firstName, lastName, email, phone, dateOfBirth, gender, address, city, state, zipCode, guardianName, guardianPhone, guardianEmail, govtIdType, govtIdNumber, enrollmentDate, status, activeClassId, activeClassName, createdAt, updatedAt`. `status`: `ACTIVE, INACTIVE, GRADUATED, TRANSFERRED, DROPPED`.
 
 | Call | Notes |
 |---|---|
 | `POST /api/v1/organizations/{organizationId}/students` | Body needs `branchId, firstName, lastName`. If `classId` **and** `academicYear` are both sent, an `ACTIVE` enrollment is created too. |
-| `GET /api/v1/organizations/{organizationId}/students` | Filters: `branchId`, `classId` (students actively enrolled in that class), `q`. |
+| `GET /api/v1/organizations/{organizationId}/students` | Filters: `branchId`, `classId` (students actively enrolled in that class), `q`. `classId` and `q` combine: search runs within the class roster. |
 | `PUT /api/v1/organizations/{organizationId}/students/{studentId}` | Partial update (null fields ignored). Moving a student to another branch is rejected while they have an active enrollment. |
 
 **StudentEnrollment** fields: `id, arkId, organizationId, branchId, studentId, classId, academicYear, enrolledAt, exitedAt, exitReason, status, createdAt, updatedAt`.
@@ -149,7 +149,7 @@ Grades: `A+` ≥ 90%, `A` ≥ 80, `B+` ≥ 70, `B` ≥ 60, `C` ≥ 50, `D` ≥ 4
 ### Preview
 `GET /api/v1/organizations/{organizationId}/branches/{branchId}/promotions/preview?sourceClassId=&targetAcademicYear=`
 
-Returns `sourceClass{id, name, section, academicYear, branchId, status}`, `targetClassName`, `targetAcademicYear`, `terminalClass`, `totalEligible, totalRecommendedPromote, totalRecommendedHoldBack, totalRecommendedGraduate, totalNoExamData` and `candidates[{studentId, studentArkId, firstName, lastName, rollNumber, recommendation, hasFailingResults, failedSubjects[], examSummary, hasExamData}]`.
+Returns `sourceClass{id, name, section, academicYear, branchId, status}`, `targetClassName`, `targetAcademicYear`, `terminalClass`, `totalEligible, totalRecommendedPromote, totalRecommendedHoldBack, totalRecommendedGraduate, totalNoExamData, noFinalExam` (true when no FINAL exam exists for the class's year, so recommendations are not based on results) and `candidates[{studentId, studentArkId, firstName, lastName, rollNumber, recommendation, hasFailingResults, failedSubjects[], examSummary, hasExamData}]`.
 
 | Condition | `recommendation` |
 |---|---|
@@ -170,7 +170,7 @@ Only `ACTIVE` students are listed; only exams of type `FINAL` count.
 
 Validation (all return before anything changes): `targetAcademicYear` must be `YYYY-YYYY` and later than the source class's year (400); the source class must not already be `COMPLETED` (409, so a second run does nothing); an override must name a student actively enrolled in the source class, at most once; `PROMOTE` is not allowed in the terminal class and `GRADUATE` is not allowed elsewhere (400).
 
-What happens, per active student: no override means `GRADUATE` in the terminal class and `PROMOTE` otherwise.
+What happens, per active student: no override means `GRADUATE` in the terminal class; otherwise the preview's recommendation is applied (`HOLD_BACK` for a student who failed a FINAL-exam subject, `PROMOTE` for the rest).
 
 | Action | Effect |
 |---|---|

@@ -37,6 +37,8 @@ public interface StudentEnrollmentRepository extends MongoRepository<StudentEnro
 
     List<StudentEnrollment> findByOrganizationIdAndClassIdAndStatus(String organizationId, String classId, EnrollmentStatus status);
 
+    List<StudentEnrollment> findByOrganizationIdAndStudentIdInAndStatus(String organizationId, java.util.Collection<String> studentIds, EnrollmentStatus status);
+
     Page<StudentEnrollment> findByOrganizationIdAndBranchIdAndAcademicYear(String organizationId, String branchId, String academicYear, Pageable pageable);
 
     boolean existsByStudentIdAndStatus(String studentId, EnrollmentStatus status);

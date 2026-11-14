@@ -16,6 +16,8 @@ public class PromotionPreviewResponse {
     private int totalRecommendedHoldBack;
     private int totalRecommendedGraduate;
     private int totalNoExamData;
+    /** True when the branch has no FINAL exam for the source class's year: recommendations are not based on results. */
+    private boolean noFinalExam;
     private List<PromotionCandidate> candidates;
 
     @Data

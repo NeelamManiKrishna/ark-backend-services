@@ -209,6 +209,33 @@ class DataBugsAcceptanceTest extends AbstractMongoIntegrationTest {
     }
 
     @Test
+    void classFilterIsKeptWhenSearching() throws Exception {
+        student("Oneida"); // same prefix as s1 ("One") but not enrolled in grade1
+        String url = "/api/v1/organizations/" + org.getId() + "/students?branchId=" + branch.getId() + "&classId=" + grade1.getId();
+        mvc.perform(get(url + "&q=One").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].firstName").value("One"))
+                .andExpect(jsonPath("$.content[0].activeClassId").value(grade1.getId()))
+                .andExpect(jsonPath("$.content[0].activeClassName").value("Grade 1 A"));
+        mvc.perform(get(url + "&q=Zzz").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(0));
+        // students without an active enrollment report no class
+        mvc.perform(get("/api/v1/organizations/" + org.getId() + "/students?q=Oneida").header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.content[0].activeClassId").doesNotExist());
+    }
+
+    @Test
+    void promotionPreviewFlagsMissingFinalExam() throws Exception {
+        configureProgression();
+        mvc.perform(get(base() + "/promotions/preview?sourceClassId=" + grade1.getId()
+                        + "&targetAcademicYear=2026-2027").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.noFinalExam").value(true));
+    }
+
+    @Test
     void facultyImportRejectsBadEmailAndDuplicateEmployeeId() throws Exception {
         String csv = "firstName,lastName,email,branchId,govtIdType,govtIdNumber,employeeId\n"
                 + "Good,One,good@x.test," + branch.getId() + ",PAN,F1,E1\n"

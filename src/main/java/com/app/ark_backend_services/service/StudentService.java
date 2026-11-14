@@ -38,6 +38,7 @@ public class StudentService {
     private final AuditLogService auditLogService;
     private final CatalogResolver catalogResolver;
     private final SearchService searchService;
+    private final com.app.ark_backend_services.repository.AcademicClassRepository academicClassRepository;
 
     public StudentResponse create(String organizationId, CreateStudentRequest request) {
         AccessPolicy.assertOrg(organizationId);
@@ -96,7 +97,7 @@ public class StudentService {
         Student student = studentRepository.findByIdAndOrganizationId(studentId, organizationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + studentId));
         AccessPolicy.assertBranch(student.getBranchId());
-        return StudentResponse.from(student);
+        return withActiveClass(organizationId, List.of(StudentResponse.from(student))).get(0);
     }
 
     public Page<StudentResponse> getAllByOrganization(String organizationId, Pageable pageable) {
@@ -104,17 +105,17 @@ public class StudentService {
         validateOrganizationExists(organizationId);
         String branchId = AccessPolicy.restrictBranch(null);
         if (branchId != null) {
-            return studentRepository.findByOrganizationIdAndBranchId(organizationId, branchId, pageable)
-                    .map(StudentResponse::from);
+            return withActiveClass(organizationId, studentRepository.findByOrganizationIdAndBranchId(organizationId, branchId, pageable)
+                    .map(StudentResponse::from));
         }
-        return studentRepository.findByOrganizationId(organizationId, pageable).map(StudentResponse::from);
+        return withActiveClass(organizationId, studentRepository.findByOrganizationId(organizationId, pageable).map(StudentResponse::from));
     }
 
     public Page<StudentResponse> getAllByBranch(String organizationId, String branchId, Pageable pageable) {
         AccessPolicy.assertOrg(organizationId);
         AccessPolicy.assertBranch(branchId);
-        return studentRepository.findByOrganizationIdAndBranchId(organizationId, branchId, pageable)
-                .map(StudentResponse::from);
+        return withActiveClass(organizationId, studentRepository.findByOrganizationIdAndBranchId(organizationId, branchId, pageable)
+                .map(StudentResponse::from));
     }
 
     public Page<StudentResponse> getAllByClass(String organizationId, String classId, Pageable pageable) {
@@ -134,7 +135,7 @@ public class StudentService {
         Page<Student> students = allowedBranch != null
                 ? studentRepository.findByIdInAndOrganizationIdAndBranchId(studentIds, organizationId, allowedBranch, pageable)
                 : studentRepository.findByIdInAndOrganizationId(studentIds, organizationId, pageable);
-        return students.map(StudentResponse::from);
+        return withActiveClass(organizationId, students.map(StudentResponse::from));
     }
 
     public StudentResponse update(String organizationId, String studentId, UpdateStudentRequest request) {
@@ -237,14 +238,50 @@ public class StudentService {
     }
 
     /** Prefix search ("q") over name, email, ARK id and roll number, within the caller's scope. */
-    public Page<StudentResponse> search(String organizationId, String branchId, String q, Pageable pageable) {
+    public Page<StudentResponse> search(String organizationId, String branchId, String classId, String q, Pageable pageable) {
         AccessPolicy.assertOrg(organizationId);
         String effectiveBranch = AccessPolicy.restrictBranch(branchId);
         org.springframework.data.mongodb.core.query.Criteria scope = org.springframework.data.mongodb.core.query.Criteria.where("organizationId").is(organizationId);
         if (effectiveBranch != null) {
             scope = scope.and("branchId").is(effectiveBranch);
         }
-        return searchService.search(Student.class, scope, q,
-                java.util.List.of("firstName", "lastName", "email", "arkId", "rollNumber"), pageable, StudentResponse::from);
+        if (classId != null) {
+            // Search within the class roster (ACTIVE enrollments); the tenant/branch scope above still applies
+            List<String> rosterIds = enrollmentRepository
+                    .findByOrganizationIdAndClassIdAndStatus(organizationId, classId, EnrollmentStatus.ACTIVE).stream()
+                    .map(StudentEnrollment::getStudentId).collect(Collectors.toList());
+            if (rosterIds.isEmpty()) {
+                return Page.empty(pageable);
+            }
+            scope = scope.and("_id").in(rosterIds);
+        }
+        return withActiveClass(organizationId, searchService.search(Student.class, scope, q,
+                java.util.List.of("firstName", "lastName", "email", "arkId", "rollNumber"), pageable, StudentResponse::from));
+    }
+
+    private Page<StudentResponse> withActiveClass(String organizationId, Page<StudentResponse> page) {
+        withActiveClass(organizationId, page.getContent());
+        return page;
+    }
+
+    /** Fills activeClassId/activeClassName with one enrollment query and one class query for the whole list. */
+    private List<StudentResponse> withActiveClass(String organizationId, List<StudentResponse> rows) {
+        if (rows.isEmpty()) {
+            return rows;
+        }
+        java.util.Map<String, String> classByStudent = new java.util.HashMap<>();
+        for (StudentEnrollment e : enrollmentRepository.findByOrganizationIdAndStudentIdInAndStatus(
+                organizationId, rows.stream().map(StudentResponse::getId).toList(), EnrollmentStatus.ACTIVE)) {
+            classByStudent.putIfAbsent(e.getStudentId(), e.getClassId());
+        }
+        java.util.Map<String, String> nameByClass = new java.util.HashMap<>();
+        academicClassRepository.findAllById(classByStudent.values().stream().distinct().toList()).forEach(c ->
+                nameByClass.put(c.getId(), c.getSection() != null ? c.getName() + " " + c.getSection() : c.getName()));
+        for (StudentResponse r : rows) {
+            String classId = classByStudent.get(r.getId());
+            r.setActiveClassId(classId);
+            r.setActiveClassName(classId != null ? nameByClass.get(classId) : null);
+        }
+        return rows;
     }
 }

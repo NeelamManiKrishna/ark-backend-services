@@ -641,3 +641,9 @@ Added entity-appropriate default sort to all paginated endpoints using Spring Da
 - Migration count is now six (`--migrate`).
 - **Frontend impact:** gender values are upper-case in responses; new optional `academicYearId`/`subjectId` fields on several requests and responses; class progression saves can now return 400 for gaps or a non-last terminal level.
 
+## Session: promotion hold-back, import validation, student list fixes (2026-11-14)
+- **Promotion execute** applies the preview recommendation when a student has no override (failing a FINAL subject means `HOLD_BACK`); before, everyone without an override was promoted. Preview gained `noFinalExam`.
+- **CSV import:** students and faculty reject invalid `email` (and `guardianEmail`); faculty rejects duplicate `employeeId` within the file and within the org. Bad rows are reported in `errors`.
+- **`GET /students`:** `classId` is no longer dropped when `q` is present (search within the class roster). `StudentResponse` gained `activeClassId`/`activeClassName`, filled with one batched enrollment query and one class query per page.
+- **Frontend impact:** new optional fields `activeClassId`, `activeClassName` (students) and `noFinalExam` (promotion preview); update `src/types` accordingly.
+- **Open:** `GET class-progression` still returns 404 when none is configured.

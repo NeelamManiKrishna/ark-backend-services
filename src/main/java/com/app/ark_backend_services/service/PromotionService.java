@@ -188,6 +188,7 @@ public class PromotionService {
         response.setTotalRecommendedHoldBack(recommendHoldBack);
         response.setTotalRecommendedGraduate(recommendGraduate);
         response.setTotalNoExamData(noExamData);
+        response.setNoFinalExam(finalExams.isEmpty());
         response.setCandidates(candidates);
 
         return response;
