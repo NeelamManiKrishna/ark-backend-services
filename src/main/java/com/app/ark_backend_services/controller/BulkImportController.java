@@ -67,6 +67,7 @@ public class BulkImportController {
     }
 
     @GetMapping("/samples/{entityType}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN')")
     @Operation(summary = "Download sample CSV", description = "Download a sample CSV template for the specified entity type. Valid types: students, faculty, academic-classes, branches")
     @ApiResponse(responseCode = "200", description = "Sample CSV returned")
     public ResponseEntity<byte[]> downloadSample(

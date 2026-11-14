@@ -12,12 +12,11 @@ import com.app.ark_backend_services.model.ExamResult.ResultStatus;
 import com.app.ark_backend_services.model.StudentEnrollment.EnrollmentStatus;
 import com.app.ark_backend_services.model.StudentEnrollment.ExitReason;
 import com.app.ark_backend_services.repository.*;
-import com.app.ark_backend_services.security.CurrentUser;
+import com.app.ark_backend_services.security.AccessPolicy;
+import com.app.ark_backend_services.util.AcademicYears;
 import com.app.ark_backend_services.util.ArkIdGenerator;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.*;
@@ -35,13 +34,20 @@ public class PromotionService {
     private final ExamSubjectRepository examSubjectRepository;
     private final ExamResultRepository examResultRepository;
     private final AuditLogService auditLogService;
+    private final CatalogResolver catalogResolver;
 
     public PromotionPreviewResponse preview(String organizationId, String branchId, String sourceClassId, String targetAcademicYear) {
-        validateOrgAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
+        AccessPolicy.assertBranch(branchId);
 
         // Get source class
         AcademicClass sourceClass = academicClassRepository.findByIdAndOrganizationIdAndBranchId(sourceClassId, organizationId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Source class not found: " + sourceClassId));
+
+        AcademicYears.assertLater(targetAcademicYear, sourceClass.getAcademicYear());
+        if (sourceClass.getStatus() == ClassStatus.COMPLETED) {
+            throw new IllegalStateException("Source class has already been promoted (status COMPLETED)");
+        }
 
         // Get class progression
         ClassProgression progression = progressionRepository.findByOrganizationIdAndBranchId(organizationId, branchId)
@@ -89,6 +95,14 @@ public class PromotionService {
             subjectsByExamId.put(exam.getId(), examSubjectRepository.findByExaminationIdAndClassId(exam.getId(), sourceClassId));
         }
 
+        // Batch-fetch every result of those exams once; index by student and subject (no queries inside the loops)
+        Map<String, Map<String, ExamResult>> resultsByStudent = new HashMap<>();
+        if (!finalExams.isEmpty()) {
+            for (ExamResult r : examResultRepository.findByExaminationIdIn(finalExams.stream().map(Examination::getId).toList())) {
+                resultsByStudent.computeIfAbsent(r.getStudentId(), k -> new HashMap<>()).put(r.getExamSubjectId(), r);
+            }
+        }
+
         // Build candidates
         List<PromotionCandidate> candidates = new ArrayList<>();
         int recommendPromote = 0, recommendHoldBack = 0, recommendGraduate = 0, noExamData = 0;
@@ -114,10 +128,8 @@ public class PromotionService {
                 List<ExamSubject> subjects = subjectsByExamId.getOrDefault(exam.getId(), List.of());
                 for (ExamSubject subject : subjects) {
                     totalSubjects++;
-                    List<ExamResult> results = examResultRepository.findByExaminationIdAndStudentId(exam.getId(), student.getId());
-                    Optional<ExamResult> result = results.stream()
-                            .filter(r -> r.getExamSubjectId().equals(subject.getId()))
-                            .findFirst();
+                    Optional<ExamResult> result = Optional.ofNullable(
+                            resultsByStudent.getOrDefault(student.getId(), Map.of()).get(subject.getId()));
 
                     if (result.isPresent()) {
                         hasExamData = true;
@@ -181,13 +193,20 @@ public class PromotionService {
         return response;
     }
 
-    @Transactional
     public PromotionExecuteResponse execute(String organizationId, String branchId, PromotionExecuteRequest request) {
-        validateOrgAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
+        AccessPolicy.assertBranch(branchId);
+        var targetYear = catalogResolver.year(organizationId, request.getTargetAcademicYearId(), request.getTargetAcademicYear());
+        request.setTargetAcademicYear(targetYear.label());
 
         // Get source class
         AcademicClass sourceClass = academicClassRepository.findByIdAndOrganizationIdAndBranchId(request.getSourceClassId(), organizationId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Source class not found: " + request.getSourceClassId()));
+
+        AcademicYears.assertLater(request.getTargetAcademicYear(), sourceClass.getAcademicYear());
+        if (sourceClass.getStatus() == ClassStatus.COMPLETED) {
+            throw new IllegalStateException("Source class has already been promoted (status COMPLETED)");
+        }
 
         // Get class progression
         ClassProgression progression = progressionRepository.findByOrganizationIdAndBranchId(organizationId, branchId)
@@ -211,28 +230,22 @@ public class PromotionService {
         String targetSection = request.getTargetSection() != null ? request.getTargetSection() : sourceClass.getSection();
 
         // Find or create target class (only if not terminal)
-        AcademicClass targetClass = null;
-        if (!isTerminal) {
-            targetClass = academicClassRepository.findByOrganizationIdAndBranchIdAndNameAndSectionAndAcademicYear(
-                    organizationId, branchId, targetClassName, targetSection, request.getTargetAcademicYear()
-            ).orElseGet(() -> {
-                AcademicClass newClass = new AcademicClass();
-                newClass.setOrganizationId(organizationId);
-                newClass.setBranchId(branchId);
-                newClass.setName(targetClassName);
-                newClass.setSection(targetSection);
-                newClass.setAcademicYear(request.getTargetAcademicYear());
-                newClass.setCapacity(sourceClass.getCapacity());
-                newClass.setStatus(ClassStatus.ACTIVE);
-                return academicClassRepository.save(newClass);
-            });
-        }
+        AcademicClass targetClass = isTerminal ? null
+                : findOrCreateClass(organizationId, branchId, sourceClass, targetClassName, targetSection, request.getTargetAcademicYear());
 
         // Build override map
         Map<String, PromotionExecuteRequest.StudentOverride> overrideMap = new HashMap<>();
         if (request.getStudentOverrides() != null) {
             for (PromotionExecuteRequest.StudentOverride override : request.getStudentOverrides()) {
-                overrideMap.put(override.getStudentId(), override);
+                if (overrideMap.put(override.getStudentId(), override) != null) {
+                    throw new IllegalArgumentException("Duplicate override for student " + override.getStudentId());
+                }
+                if (override.getAction() == PromotionExecuteRequest.Action.PROMOTE && isTerminal) {
+                    throw new IllegalArgumentException("Cannot PROMOTE a student from the terminal class; use GRADUATE");
+                }
+                if (override.getAction() == PromotionExecuteRequest.Action.GRADUATE && !isTerminal) {
+                    throw new IllegalArgumentException("Cannot GRADUATE a student from a non-terminal class");
+                }
             }
         }
 
@@ -240,12 +253,26 @@ public class PromotionService {
         List<StudentEnrollment> enrollments = enrollmentRepository
                 .findByOrganizationIdAndClassIdAndStatus(organizationId, request.getSourceClassId(), EnrollmentStatus.ACTIVE);
 
+        Set<String> rosterIds = enrollments.stream().map(StudentEnrollment::getStudentId).collect(Collectors.toSet());
+        for (String overrideStudentId : overrideMap.keySet()) {
+            if (!rosterIds.contains(overrideStudentId)) {
+                throw new IllegalArgumentException("Override refers to a student who is not actively enrolled in the source class: " + overrideStudentId);
+            }
+        }
+
         // Batch-fetch all students (eliminates N+1 queries)
         List<String> execStudentIds = enrollments.stream().map(StudentEnrollment::getStudentId).toList();
         Map<String, Student> execStudentMap = studentRepository.findAllById(execStudentIds).stream()
                 .collect(Collectors.toMap(Student::getId, s -> s));
 
-        int promoted = 0, graduated = 0, heldBack = 0;
+        // Without an explicit override, follow the same recommendation the preview shows
+        // (HOLD_BACK for students who failed a FINAL exam subject).
+        Map<String, String> recommendations = preview(organizationId, branchId, request.getSourceClassId(), request.getTargetAcademicYear())
+                .getCandidates().stream()
+                .collect(Collectors.toMap(PromotionCandidate::getStudentId, PromotionCandidate::getRecommendation, (a, b) -> a));
+
+        int promoted = 0, graduated = 0, heldBack = 0, skipped = 0;
+        AcademicClass heldBackClass = null;
         List<PromotionRecordDto> records = new ArrayList<>();
 
         for (StudentEnrollment enrollment : enrollments) {
@@ -257,12 +284,15 @@ public class PromotionService {
             String reason = null;
             PromotionExecuteRequest.StudentOverride override = overrideMap.get(student.getId());
             if (override != null) {
-                action = override.getAction();
+                action = override.getAction().name();
                 reason = override.getReason();
             } else if (isTerminal) {
                 action = "GRADUATE";
             } else {
-                action = "PROMOTE";
+                action = "HOLD_BACK".equals(recommendations.get(student.getId())) ? "HOLD_BACK" : "PROMOTE";
+                if ("HOLD_BACK".equals(action)) {
+                    reason = "Held back automatically: failed a FINAL exam subject";
+                }
             }
 
             // Process based on action
@@ -271,6 +301,16 @@ public class PromotionService {
             record.setStudentArkId(student.getArkId());
             record.setStudentName(student.getFirstName() + " " + student.getLastName());
             record.setReason(reason);
+
+            // Idempotency: a student who already has an enrollment in the target year is left alone
+            if (!"GRADUATE".equals(action) && enrollmentRepository.existsByOrganizationIdAndStudentIdAndAcademicYear(
+                    organizationId, student.getId(), request.getTargetAcademicYear())) {
+                record.setPromotionType("SKIPPED");
+                record.setReason("Already enrolled for " + request.getTargetAcademicYear());
+                skipped++;
+                records.add(record);
+                continue;
+            }
 
             switch (action) {
                 case "PROMOTE" -> {
@@ -288,6 +328,7 @@ public class PromotionService {
                     newEnrollment.setStudentId(student.getId());
                     newEnrollment.setClassId(targetClass.getId());
                     newEnrollment.setAcademicYear(request.getTargetAcademicYear());
+                    newEnrollment.setAcademicYearId(targetYear.id());
                     newEnrollment.setEnrolledAt(LocalDate.now());
                     newEnrollment.setStatus(EnrollmentStatus.ACTIVE);
                     enrollmentRepository.save(newEnrollment);
@@ -309,11 +350,39 @@ public class PromotionService {
                     graduated++;
                 }
                 case "HOLD_BACK" -> {
-                    // Student stays in current class — enrollment remains ACTIVE, no changes
+                    // Repeat the same class level next year: close the old enrollment as HELD_BACK and
+                    // enrol the student in the same class (name + section) for the target year.
+                    if (heldBackClass == null) {
+                        heldBackClass = findOrCreateClass(organizationId, branchId, sourceClass,
+                                sourceClass.getName(), sourceClass.getSection(), request.getTargetAcademicYear());
+                    }
+                    enrollment.setStatus(EnrollmentStatus.COMPLETED);
+                    enrollment.setExitReason(ExitReason.HELD_BACK);
+                    enrollment.setExitedAt(LocalDate.now());
+                    enrollmentRepository.save(enrollment);
+
+                    StudentEnrollment repeat = new StudentEnrollment();
+                    repeat.setArkId(ArkIdGenerator.generateEnrollmentId());
+                    repeat.setOrganizationId(organizationId);
+                    repeat.setBranchId(branchId);
+                    repeat.setStudentId(student.getId());
+                    repeat.setClassId(heldBackClass.getId());
+                    repeat.setAcademicYear(request.getTargetAcademicYear());
+                    repeat.setAcademicYearId(targetYear.id());
+                    repeat.setEnrolledAt(LocalDate.now());
+                    repeat.setStatus(EnrollmentStatus.ACTIVE);
+                    enrollmentRepository.save(repeat);
+
                     record.setPromotionType("HELD_BACK");
+                    record.setTargetClassId(heldBackClass.getId());
                     heldBack++;
                 }
             }
+
+            auditLogService.log(Action.UPDATE, "StudentEnrollment", enrollment.getId(),
+                    record.getStudentName(), organizationId,
+                    "Promotion " + record.getPromotionType() + " from class " + sourceClass.getName()
+                            + " " + sourceClass.getSection() + (record.getReason() != null ? " (" + record.getReason() + ")" : ""));
 
             records.add(record);
         }
@@ -336,6 +405,7 @@ public class PromotionService {
         summary.setPromoted(promoted);
         summary.setGraduated(graduated);
         summary.setHeldBack(heldBack);
+        summary.setSkipped(skipped);
         response.setSummary(summary);
         response.setRecords(records);
 
@@ -346,9 +416,26 @@ public class PromotionService {
         return response;
     }
 
-    private void validateOrgAccess(String organizationId) {
-        if (!CurrentUser.belongsToOrg(organizationId)) {
-            throw new AccessDeniedException("You do not have access to this organization");
-        }
+
+    /** Finds the class for the target year or creates it (and audits the creation). */
+    private AcademicClass findOrCreateClass(String organizationId, String branchId, AcademicClass template,
+                                            String name, String section, String academicYear) {
+        return academicClassRepository.findByOrganizationIdAndBranchIdAndNameAndSectionAndAcademicYear(
+                organizationId, branchId, name, section, academicYear
+        ).orElseGet(() -> {
+            AcademicClass newClass = new AcademicClass();
+            newClass.setOrganizationId(organizationId);
+            newClass.setBranchId(branchId);
+            newClass.setName(name);
+            newClass.setSection(section);
+            newClass.setAcademicYear(academicYear);
+            newClass.setAcademicYearId(catalogResolver.year(organizationId, null, academicYear).id());
+            newClass.setCapacity(template.getCapacity());
+            newClass.setStatus(ClassStatus.ACTIVE);
+            AcademicClass saved = academicClassRepository.save(newClass);
+            auditLogService.log(Action.CREATE, "AcademicClass", saved.getId(), name + " " + section, organizationId,
+                    "Class auto-created by promotion for " + academicYear);
+            return saved;
+        });
     }
 }

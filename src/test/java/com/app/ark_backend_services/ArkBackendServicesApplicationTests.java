@@ -1,10 +1,8 @@
 package com.app.ark_backend_services;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
-class ArkBackendServicesApplicationTests {
+class ArkBackendServicesApplicationTests extends AbstractMongoIntegrationTest {
 
 	@Test
 	void contextLoads() {

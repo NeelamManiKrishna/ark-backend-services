@@ -16,6 +16,7 @@ public class ExamSubjectResponse {
     private String branchId;
     private String classId;
     private String subjectName;
+    private String subjectId;
     private String subjectCode;
     private Double maxMarks;
     private Double passingMarks;
@@ -32,6 +33,7 @@ public class ExamSubjectResponse {
         response.setBranchId(es.getBranchId());
         response.setClassId(es.getClassId());
         response.setSubjectName(es.getSubjectName());
+        response.setSubjectId(es.getSubjectId());
         response.setSubjectCode(es.getSubjectCode());
         response.setMaxMarks(es.getMaxMarks());
         response.setPassingMarks(es.getPassingMarks());

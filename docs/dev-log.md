@@ -589,3 +589,55 @@ Added entity-appropriate default sort to all paginated endpoints using Spring Da
 
 - All defaults are overridable by client via `?sort=fieldName,asc|desc`
 - WebConfig global fallback (`createdAt DESC`) still applies if no `@SortDefault` present
+
+## Session: Backend plan Phase 0 + 1 (2026-11-14)
+
+### Phase 0: Safety net
+- `application.yaml` now reads `MONGO_URI`, `JWT_SECRET`, `FIELD_ENCRYPTION_KEY` (no committed secrets); `application-dev.yaml` holds local values. Run with `-Dspring-boot.run.profiles=dev`.
+- Added `.gitignore`, README, GitHub Actions CI (`mvn -B test`; the repo has no `mvnw`).
+- Tests use Testcontainers MongoDB (`AbstractMongoIntegrationTest`); Docker must be running.
+- **Decision:** removed the `@Transactional` annotations. There is no `MongoTransactionManager` and the dev Mongo is standalone, so they did nothing. Cascade deletes already remove children before parents and are safe to re-run.
+
+### Phase 1: Security and login (Part A contract)
+- `/auth/register` removed. New: `/auth/logout`, `/auth/logout-all`, `/auth/me`, `/auth/change-password`. Login returns `{accessToken, refreshToken, expiresIn, user}`.
+- Refresh tokens are opaque, stored as SHA-256 in `refresh_sessions`, single-use with family revocation on reuse. Access tokens (30 min) carry `sub, role, org, branch, ver, typ`; `User.tokenVersion` is bumped on password, role, branch and disable changes.
+- Login: 401 `INVALID_CREDENTIALS` for unknown email and wrong password, `LOGIN_FAILED` audited for both, lockout after 5 failures for 15 min (`ACCOUNT_LOCKED` 403), `ORG_SUSPENDED` 403 for an inactive org or branch. `JwtAuthenticationFilter` re-checks user status, token version, org and branch on every request.
+- `AccessScope` + `AccessPolicy` replace the per-service `validateOrgAccess` copies. ADMIN/USER are restricted to their own branch on reads and writes; list endpoints are narrowed to the caller branch; USER writes are denied and `govtIdNumber` is masked.
+- Fixed org-unscoped lookups (enrollment, assignment, faculty performance); assignment and enrollment endpoints now honour the path `branchId`; `getResultsBySubject` filters by subject; `updateExamResult` verifies the exam.
+- `UserService`: no self-edit/delete, only roles strictly below the caller can be managed, the last ORG_ADMIN is protected, ADMIN creates USER only in own branch and cannot see ORG_ADMINs.
+- ORG_ADMIN can `PUT /organizations/{own id}` (not status) and read `GET /organizations/{id}/audit-logs`.
+- `govtIdNumber` encrypted with AES-GCM (`FieldEncryption`, `@ValueConverter`); legacy plaintext still reads.
+- Error body is now `{error, message, timestamp, path, fieldErrors?}` with the Part A2 codes (validation errors are 422).
+- CORS origins come from `app.cors.allowed-origins`.
+- **Breaking for the frontend:** register is gone, the `error` field is now a code, validation status is 422, the login/refresh response changed, and existing tokens are invalid.
+
+## Session: Backend plan Phase 2, data bugs (2026-11-14)
+- **Bulk student import:** class and year are validated before a row joins the batch (class exists, belongs to the row's branch, year is `YYYY-YYYY`); students and enrollments travel together in one record so they can never misalign; counts are taken after the save; a failed bulk write is retried row by row and reports row numbers.
+- **Promotion:** target year must be `YYYY-YYYY` and later than the source year; source class already `COMPLETED` is rejected (409), so a second run cannot duplicate; overrides are validated (enum action, `@Valid`, student must be on the roster, no PROMOTE in the terminal class, no GRADUATE elsewhere); students already enrolled in the target year are skipped; held-back students are closed with `HELD_BACK` and re-enrolled in the same class for the next year; auto-created classes and per-student changes are audited; preview reads all results with one query.
+- **Exams:** marks entry checks the enrollment for the exam's academic year and class (no more fallback to the current active enrollment); changing max/passing marks recomputes grade and PASS/FAIL (ABSENT/WITHHELD untouched); grade calculation guards `maxMarks <= 0`; exam year is validated and cannot change once subjects exist; new `DELETE /examinations/{e}/results/{r}`.
+- **Classes and people:** class delete is blocked by enrollment history, faculty assignments or exam subjects; moving a student/faculty to another branch checks the branch exists and rejects active enrollments/assignments; closing an enrollment with GRADUATED/TRANSFERRED/DROPPED updates the student status; new `PUT .../enrollments/{id}/reopen` (latest enrollment only, no active enrollment); class progression validates unique order/name and exactly one terminal, audits CREATE on first save, and has `DELETE`.
+- **Audit:** `GET /audit-logs` and `GET /organizations/{o}/audit-logs` combine all filters; updates carry `before`/`after`/`changedFields`; delete entries are written after the delete succeeds and list cascade counts.
+- **Lists:** students-by-class paginates and sorts in the database; unpaged list endpoints are capped at 200 rows.
+
+## Session: Backend plan Phase 3, database cleanup, search and reports (2026-11-14)
+- **Schema:** removed `Student.classId` (enrollments are the source of truth); one shared `model/GovtIdType`; new `academic_years` and `subjects` collections with CRUD under `/organizations/{o}/academic-years` and `/subjects` (read: every role, write: SUPER_ADMIN/ORG_ADMIN); the academic year catalog cannot delete a year used by classes.
+- **Indexes:** students `{org,branch}`/`{org,status}`, faculty `{org,branch}`/`{org,department}`, exam results `{studentId}`/`{exam,class}`, exam subjects `{org}`, audit `{org,action}`/`{performedBy}`; `spring.data.mongodb.auto-index-creation=true` is explicit. `users.email` is a global unique index created in `MongoConfig` at startup inside a try/catch, so legacy duplicates log an error instead of stopping the app.
+- **Migrations:** `migration/MigrationRunner`. `java -jar app.jar --migrate.dry-run` prints what would change; `--migrate` applies and records each migration in `migrations` so it runs once. 001 encrypts plaintext government IDs, 002 fails (and is not recorded) when user emails clash case-insensitively, 003 removes the legacy `students.classId`. Rehearse on a copy of the database.
+- **Search:** `q` on students, faculty, users, classes and branches through `SearchService` (anchored, escaped, case-insensitive; combined with the tenant/branch criteria).
+- **Reports:** `GET /organizations/{o}/reports/enrollment|performance?academicYear=&branchId=&format=csv`, computed with aggregation pipelines; CSV cells that start with `= + - @` are neutralised.
+- **Seed:** `src/main/resources/test-data.js` is the only seed (the copy in `docs/` was deleted): correct `ARK-ASN-`/`ARK-EXM-` prefixes, real counts, a completed FINAL exam with results for Springfield 1st Class A (Emma PROMOTE, Liam and Aiden HOLD_BACK), academic years and subjects per organization, indexes left to the application.
+- **Left open on purpose:** see the Phase 3 status note in `ARK_Backend_Plan.md` (class progression ids, id-based catalogs, copied `branchId`).
+
+## Session: Backend plan Phase 5, documentation (2026-11-14)
+- `docs/architecture.md` rewritten from the code: layers, configuration, tenancy and `AccessPolicy`, authentication and sessions, collections and indexes, cascades, audit, errors, search/reports/migrations, tests, and a generated endpoint reference (95 operations with roles).
+- `docs/api-guide.md` is the single client guide. It replaces `promotion-api.md` and `enrollment-assignment-api.md`, which described endpoints and fields that do not exist (`/students/{id}/enrollments`, promotion history, `currentEnrollment`, class-teacher endpoint, `subjectCode`/`assignedAt` on assignments, `PromotionRecord`, `Student.classId`) and out-of-date errors.
+- New `ApiDocsConsistencyTest`: every operation in `/v3/api-docs` must be a row in the architecture table and every `/api/v1` path in the docs must exist.
+- Facts worth knowing that the old docs got wrong: the backend does not enforce one class teacher per class; assignment status is `ACTIVE`/`COMPLETED`; enrollment endpoints live under `/branches/{branchId}/enrollments`; there is no undo for promotion beyond closing/reopening enrollments.
+
+## Session: settling the three open Phase 3 items (2026-11-14)
+- **Class progression** keeps class names. Validation: orders 1..n without gaps, unique names, exactly one terminal level and it is last. The response lists `classesNotCreatedYet`; requiring every class to exist was rejected because promotion auto-creates the next class, so it would block normal setup.
+- **Catalog ids, additive:** `CatalogResolver` turns `academicYearId`/`subjectId` or text into both values; classes, enrollments (including a student's initial one and promotion-created ones), examinations, exam subjects and faculty assignments store `academicYearId`/`subjectId` next to the text; responses return both. `@NotBlank` on the text fields moved into the resolver (missing both is now a 400 instead of a 422 field error). Migration 004 backfills; the seed script links ids itself.
+- **Copied `branchId`** kept; migration 006 repairs mismatches; tests assert the copy equals the class's branch. **Gender** validated to `MALE`/`FEMALE`/`OTHER` and stored upper-case (migration 005; the seed script now uses upper-case values).
+- Migration count is now six (`--migrate`).
+- **Frontend impact:** gender values are upper-case in responses; new optional `academicYearId`/`subjectId` fields on several requests and responses; class progression saves can now return 400 for gaps or a non-last terminal level.
+

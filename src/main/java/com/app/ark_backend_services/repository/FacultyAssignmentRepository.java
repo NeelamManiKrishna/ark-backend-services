@@ -25,6 +25,16 @@ public interface FacultyAssignmentRepository extends MongoRepository<FacultyAssi
 
     Optional<FacultyAssignment> findByIdAndOrganizationId(String id, String organizationId);
 
+    Optional<FacultyAssignment> findByIdAndOrganizationIdAndBranchId(String id, String organizationId, String branchId);
+
+    List<FacultyAssignment> findByOrganizationIdAndFacultyIdAndStatus(String organizationId, String facultyId, AssignmentStatus status);
+
+    Page<FacultyAssignment> findByOrganizationIdAndFacultyIdAndStatus(String organizationId, String facultyId, AssignmentStatus status, Pageable pageable);
+
+    Page<FacultyAssignment> findByOrganizationIdAndFacultyId(String organizationId, String facultyId, Pageable pageable);
+
+    boolean existsByOrganizationIdAndFacultyIdAndClassIdAndSubjectNameAndAcademicYear(String organizationId, String facultyId, String classId, String subjectName, String academicYear);
+
     boolean existsByFacultyIdAndClassIdAndSubjectNameAndAcademicYear(String facultyId, String classId, String subjectName, String academicYear);
 
     long countByOrganizationId(String organizationId);
@@ -32,6 +42,10 @@ public interface FacultyAssignmentRepository extends MongoRepository<FacultyAssi
     long countByOrganizationIdAndBranchId(String organizationId, String branchId);
 
     void deleteByFacultyId(String facultyId);
+
+    boolean existsByOrganizationIdAndClassId(String organizationId, String classId);
+
+    boolean existsByOrganizationIdAndFacultyIdAndStatus(String organizationId, String facultyId, AssignmentStatus status);
 
     void deleteByOrganizationId(String organizationId);
 

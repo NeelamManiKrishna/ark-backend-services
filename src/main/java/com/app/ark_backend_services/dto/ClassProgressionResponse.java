@@ -13,6 +13,8 @@ public class ClassProgressionResponse {
     private String organizationId;
     private String branchId;
     private List<ClassProgression.ClassLevel> sequence;
+    /** Levels that have no class in this branch yet (informational: promotion creates the next class on demand). */
+    private List<String> classesNotCreatedYet = List.of();
     private Instant createdAt;
     private Instant updatedAt;
 

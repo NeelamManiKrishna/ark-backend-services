@@ -11,6 +11,12 @@ public interface AcademicClassRepository extends MongoRepository<AcademicClass, 
 
     Page<AcademicClass> findByOrganizationIdAndBranchId(String organizationId, String branchId, Pageable pageable);
 
+    Optional<AcademicClass> findByIdAndOrganizationId(String id, String organizationId);
+
+    boolean existsByOrganizationIdAndBranchIdAndName(String organizationId, String branchId, String name);
+
+    boolean existsByOrganizationIdAndAcademicYear(String organizationId, String academicYear);
+
     Optional<AcademicClass> findByIdAndOrganizationIdAndBranchId(String id, String organizationId, String branchId);
 
     boolean existsByOrganizationIdAndBranchIdAndNameAndSection(String organizationId, String branchId, String name, String section);

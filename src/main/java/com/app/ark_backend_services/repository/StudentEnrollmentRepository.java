@@ -13,11 +13,23 @@ public interface StudentEnrollmentRepository extends MongoRepository<StudentEnro
 
     Optional<StudentEnrollment> findByStudentIdAndStatus(String studentId, EnrollmentStatus status);
 
+    Optional<StudentEnrollment> findByIdAndOrganizationId(String id, String organizationId);
+
+    Optional<StudentEnrollment> findByOrganizationIdAndStudentIdAndAcademicYear(String organizationId, String studentId, String academicYear);
+
+    Optional<StudentEnrollment> findByOrganizationIdAndStudentIdAndStatus(String organizationId, String studentId, EnrollmentStatus status);
+
+    boolean existsByOrganizationIdAndStudentIdAndStatus(String organizationId, String studentId, EnrollmentStatus status);
+
+    boolean existsByOrganizationIdAndStudentIdAndAcademicYear(String organizationId, String studentId, String academicYear);
+
     Optional<StudentEnrollment> findByStudentIdAndAcademicYear(String studentId, String academicYear);
 
     List<StudentEnrollment> findByStudentIdOrderByAcademicYearDesc(String studentId);
 
     List<StudentEnrollment> findByOrganizationIdAndStudentIdOrderByAcademicYearDesc(String organizationId, String studentId);
+
+    Page<StudentEnrollment> findByOrganizationIdAndStudentIdOrderByAcademicYearDesc(String organizationId, String studentId, Pageable pageable);
 
     Page<StudentEnrollment> findByClassIdAndStatus(String classId, EnrollmentStatus status, Pageable pageable);
 
@@ -28,6 +40,10 @@ public interface StudentEnrollmentRepository extends MongoRepository<StudentEnro
     Page<StudentEnrollment> findByOrganizationIdAndBranchIdAndAcademicYear(String organizationId, String branchId, String academicYear, Pageable pageable);
 
     boolean existsByStudentIdAndStatus(String studentId, EnrollmentStatus status);
+
+    boolean existsByOrganizationIdAndClassId(String organizationId, String classId);
+
+    boolean existsByOrganizationIdAndStudentIdAndAcademicYearGreaterThan(String organizationId, String studentId, String academicYear);
 
     boolean existsByStudentIdAndAcademicYear(String studentId, String academicYear);
 

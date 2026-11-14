@@ -39,6 +39,8 @@ public class StudentEnrollment {
 
     private String academicYear;
 
+    private String academicYearId;
+
     private LocalDate enrolledAt;
 
     private LocalDate exitedAt;

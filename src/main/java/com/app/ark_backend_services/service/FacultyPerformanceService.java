@@ -8,9 +8,8 @@ import com.app.ark_backend_services.model.ExamResult.ResultStatus;
 import com.app.ark_backend_services.model.FacultyAssignment.AssignmentStatus;
 import com.app.ark_backend_services.model.FacultyAssignment.AssignmentType;
 import com.app.ark_backend_services.repository.*;
-import com.app.ark_backend_services.security.CurrentUser;
+import com.app.ark_backend_services.security.AccessPolicy;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -28,12 +27,13 @@ public class FacultyPerformanceService {
     private final ExamResultRepository examResultRepository;
 
     public FacultyPerformanceResponse getOverallPerformance(String organizationId, String facultyId, String academicYear) {
-        validateOrgAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
 
         Faculty faculty = facultyRepository.findByIdAndOrganizationId(facultyId, organizationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Faculty not found: " + facultyId));
+        AccessPolicy.assertBranch(faculty.getBranchId());
 
-        List<FacultyAssignment> assignments = assignmentRepository.findByFacultyIdAndStatus(facultyId, AssignmentStatus.ACTIVE);
+        List<FacultyAssignment> assignments = assignmentRepository.findByOrganizationIdAndFacultyIdAndStatus(organizationId, facultyId, AssignmentStatus.ACTIVE);
         if (academicYear != null) {
             assignments = assignments.stream()
                     .filter(a -> academicYear.equals(a.getAcademicYear()))
@@ -52,6 +52,7 @@ public class FacultyPerformanceService {
         int totalResultCount = 0;
         Map<String, Integer> overallGrades = new LinkedHashMap<>();
         Set<String> uniqueClasses = new HashSet<>();
+        assignments.forEach(a -> uniqueClasses.add(a.getClassId()));
 
         for (Map.Entry<String, List<FacultyAssignment>> entry : bySubject.entrySet()) {
             String subjectName = entry.getKey();
@@ -65,7 +66,7 @@ public class FacultyPerformanceService {
 
             for (FacultyAssignment assignment : subjectAssignments) {
                 uniqueClasses.add(assignment.getClassId());
-                AcademicClass ac = academicClassRepository.findById(assignment.getClassId()).orElse(null);
+                AcademicClass ac = academicClassRepository.findByIdAndOrganizationId(assignment.getClassId(), organizationId).orElse(null);
                 String className = ac != null ? ac.getName() + " " + ac.getSection() : assignment.getClassId();
 
                 List<ExamResult> results = getResultsForClassSubject(organizationId, assignment.getClassId(), subjectName, assignment.getAcademicYear());
@@ -90,13 +91,13 @@ public class FacultyPerformanceService {
                 classPerformances.add(ClassPerformance.builder()
                         .classId(assignment.getClassId())
                         .className(className)
-                        .studentsCount(results.size())
+                        .studentsCount(distinctStudents(results))
                         .averageMarks(round2(avg))
                         .passPercentage(round2(passPercent))
                         .gradeDistribution(grades)
                         .build());
 
-                subjectStudents += results.size();
+                subjectStudents += distinctStudents(results);
                 subjectPassed += passed;
                 subjectMarksSum += results.stream().mapToDouble(ExamResult::getMarksObtained).sum();
                 subjectResultCount += results.size();
@@ -131,7 +132,7 @@ public class FacultyPerformanceService {
                 .findFirst();
         if (classTeacherAssignment.isPresent()) {
             FacultyAssignment cta = classTeacherAssignment.get();
-            AcademicClass ac = academicClassRepository.findById(cta.getClassId()).orElse(null);
+            AcademicClass ac = academicClassRepository.findByIdAndOrganizationId(cta.getClassId(), organizationId).orElse(null);
             if (ac != null) {
                 List<ExamResult> allClassResults = getAllResultsForClass(organizationId, cta.getClassId(), cta.getAcademicYear());
                 double classAvg = allClassResults.stream().mapToDouble(ExamResult::getMarksObtained).average().orElse(0);
@@ -169,12 +170,13 @@ public class FacultyPerformanceService {
     }
 
     public FacultyClassPerformanceResponse getClassPerformance(String organizationId, String facultyId, String classId, String academicYear) {
-        validateOrgAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
 
         Faculty faculty = facultyRepository.findByIdAndOrganizationId(facultyId, organizationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Faculty not found: " + facultyId));
+        AccessPolicy.assertBranch(faculty.getBranchId());
 
-        AcademicClass ac = academicClassRepository.findById(classId)
+        AcademicClass ac = academicClassRepository.findByIdAndOrganizationId(classId, organizationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found: " + classId));
 
         List<FacultyAssignment> assignments = assignmentRepository
@@ -210,10 +212,15 @@ public class FacultyPerformanceService {
             List<ExamResult> examResults = examResultRepository.findByExamSubjectId(matchingSubject.getId());
             if (examResults.isEmpty()) continue;
 
-            double examAvg = examResults.stream().mapToDouble(ExamResult::getMarksObtained).average().orElse(0);
-            long examPassed = examResults.stream().filter(r -> r.getStatus() == ResultStatus.PASS).count();
             long examAbsent = examResults.stream().filter(r -> r.getStatus() == ResultStatus.ABSENT).count();
-            double examPassPercent = examResults.isEmpty() ? 0 : (examPassed * 100.0 / examResults.size());
+            // Averages and pass rates only cover students who appeared and have marks
+            List<ExamResult> appeared = examResults.stream()
+                    .filter(r -> r.getMarksObtained() != null
+                            && r.getStatus() != ResultStatus.ABSENT && r.getStatus() != ResultStatus.WITHHELD)
+                    .toList();
+            double examAvg = appeared.stream().mapToDouble(ExamResult::getMarksObtained).average().orElse(0);
+            long examPassed = appeared.stream().filter(r -> r.getStatus() == ResultStatus.PASS).count();
+            double examPassPercent = appeared.isEmpty() ? 0 : (examPassed * 100.0 / appeared.size());
 
             examBreakdowns.add(FacultyClassPerformanceResponse.ExamBreakdown.builder()
                     .examinationId(exam.getId())
@@ -221,7 +228,7 @@ public class FacultyPerformanceService {
                     .examType(exam.getExamType().name())
                     .averageMarks(round2(examAvg))
                     .passPercentage(round2(examPassPercent))
-                    .studentsAppeared((int) (examResults.size() - examAbsent))
+                    .studentsAppeared(appeared.size())
                     .studentsAbsent((int) examAbsent)
                     .build());
         }
@@ -234,7 +241,7 @@ public class FacultyPerformanceService {
                 .academicYear(academicYear)
                 .subjectName(subjectName)
                 .assignmentType(assignment.getAssignmentType().name())
-                .studentsCount(results.size())
+                .studentsCount(distinctStudents(results))
                 .averageMarks(round2(avg))
                 .highestMarks(highest)
                 .lowestMarks(lowest)
@@ -245,12 +252,13 @@ public class FacultyPerformanceService {
     }
 
     public FacultySubjectPerformanceResponse getSubjectPerformance(String organizationId, String facultyId, String subjectName, String academicYear) {
-        validateOrgAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
 
         Faculty faculty = facultyRepository.findByIdAndOrganizationId(facultyId, organizationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Faculty not found: " + facultyId));
+        AccessPolicy.assertBranch(faculty.getBranchId());
 
-        List<FacultyAssignment> assignments = assignmentRepository.findByFacultyIdAndStatus(facultyId, AssignmentStatus.ACTIVE)
+        List<FacultyAssignment> assignments = assignmentRepository.findByOrganizationIdAndFacultyIdAndStatus(organizationId, facultyId, AssignmentStatus.ACTIVE)
                 .stream()
                 .filter(a -> subjectName.equals(a.getSubjectName()))
                 .filter(a -> academicYear == null || academicYear.equals(a.getAcademicYear()))
@@ -263,7 +271,7 @@ public class FacultyPerformanceService {
         int totalResultCount = 0;
 
         for (FacultyAssignment assignment : assignments) {
-            AcademicClass ac = academicClassRepository.findById(assignment.getClassId()).orElse(null);
+            AcademicClass ac = academicClassRepository.findByIdAndOrganizationId(assignment.getClassId(), organizationId).orElse(null);
             String className = ac != null ? ac.getName() + " " + ac.getSection() : assignment.getClassId();
 
             List<ExamResult> results = getResultsForClassSubject(organizationId, assignment.getClassId(), subjectName, assignment.getAcademicYear());
@@ -275,7 +283,7 @@ public class FacultyPerformanceService {
             breakdowns.add(FacultySubjectPerformanceResponse.ClassBreakdown.builder()
                     .classId(assignment.getClassId())
                     .className(className)
-                    .studentsCount(results.size())
+                    .studentsCount(distinctStudents(results))
                     .averageMarks(round2(avg))
                     .passPercentage(round2(passPercent))
                     .build());
@@ -305,37 +313,44 @@ public class FacultyPerformanceService {
     // ---- Helpers ----
 
     private List<ExamResult> getResultsForClassSubject(String organizationId, String classId, String subjectName, String academicYear) {
-        List<Examination> exams = examinationRepository.findByOrganizationIdAndBranchIdAndAcademicYear(
-                organizationId,
-                academicClassRepository.findById(classId).map(AcademicClass::getBranchId).orElse(""),
-                academicYear);
-
-        List<ExamResult> allResults = new ArrayList<>();
-        for (Examination exam : exams) {
-            List<ExamSubject> subjects = examSubjectRepository.findByExaminationIdAndClassId(exam.getId(), classId);
-            for (ExamSubject subject : subjects) {
-                if (subject.getSubjectName().equals(subjectName)) {
-                    allResults.addAll(examResultRepository.findByExamSubjectId(subject.getId()));
-                }
-            }
-        }
-        return allResults;
+        return resultsForClass(organizationId, classId, subjectName, academicYear);
     }
 
     private List<ExamResult> getAllResultsForClass(String organizationId, String classId, String academicYear) {
-        List<Examination> exams = examinationRepository.findByOrganizationIdAndBranchIdAndAcademicYear(
-                organizationId,
-                academicClassRepository.findById(classId).map(AcademicClass::getBranchId).orElse(""),
-                academicYear);
+        return resultsForClass(organizationId, classId, null, academicYear);
+    }
 
-        List<ExamResult> allResults = new ArrayList<>();
+    /**
+     * Results that count towards averages and pass rates: marks present and student not ABSENT/WITHHELD.
+     * Subjects are collected first and their results fetched with a single IN query.
+     */
+    private List<ExamResult> resultsForClass(String organizationId, String classId, String subjectName, String academicYear) {
+        String classBranchId = academicClassRepository.findByIdAndOrganizationId(classId, organizationId)
+                .map(AcademicClass::getBranchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class not found: " + classId));
+        List<Examination> exams = examinationRepository.findByOrganizationIdAndBranchIdAndAcademicYear(
+                organizationId, classBranchId, academicYear);
+
+        List<String> subjectIds = new ArrayList<>();
         for (Examination exam : exams) {
-            List<ExamSubject> subjects = examSubjectRepository.findByExaminationIdAndClassId(exam.getId(), classId);
-            for (ExamSubject subject : subjects) {
-                allResults.addAll(examResultRepository.findByExamSubjectId(subject.getId()));
+            for (ExamSubject subject : examSubjectRepository.findByExaminationIdAndClassId(exam.getId(), classId)) {
+                if (subjectName == null || subjectName.equals(subject.getSubjectName())) {
+                    subjectIds.add(subject.getId());
+                }
             }
         }
-        return allResults;
+        if (subjectIds.isEmpty()) {
+            return List.of();
+        }
+        return examResultRepository.findByExamSubjectIdIn(subjectIds).stream()
+                .filter(r -> r.getMarksObtained() != null
+                        && r.getStatus() != ResultStatus.ABSENT
+                        && r.getStatus() != ResultStatus.WITHHELD)
+                .toList();
+    }
+
+    private static int distinctStudents(List<ExamResult> results) {
+        return (int) results.stream().map(ExamResult::getStudentId).distinct().count();
     }
 
     private Map<String, Integer> countGrades(List<ExamResult> results) {
@@ -359,9 +374,4 @@ public class FacultyPerformanceService {
         return Math.round(value * 100.0) / 100.0;
     }
 
-    private void validateOrgAccess(String organizationId) {
-        if (!CurrentUser.belongsToOrg(organizationId)) {
-            throw new AccessDeniedException("You do not have access to this organization");
-        }
-    }
 }

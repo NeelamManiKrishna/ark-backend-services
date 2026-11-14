@@ -1,6 +1,6 @@
 package com.app.ark_backend_services.dto;
 
-import com.app.ark_backend_services.model.Faculty.GovtIdType;
+import com.app.ark_backend_services.model.GovtIdType;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -27,6 +27,7 @@ public class CreateFacultyRequest {
     private String email;
     private String phone;
     private LocalDate dateOfBirth;
+    /** MALE, FEMALE or OTHER (case-insensitive; stored upper-case). */
     private String gender;
     private String address;
     private String city;

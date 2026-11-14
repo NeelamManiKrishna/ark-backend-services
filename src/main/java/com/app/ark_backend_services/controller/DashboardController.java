@@ -3,7 +3,7 @@ package com.app.ark_backend_services.controller;
 import com.app.ark_backend_services.dto.BranchDashboardResponse;
 import com.app.ark_backend_services.dto.OrgDashboardResponse;
 import com.app.ark_backend_services.dto.PlatformDashboardResponse;
-import com.app.ark_backend_services.security.CurrentUser;
+import com.app.ark_backend_services.security.AccessPolicy;
 import com.app.ark_backend_services.service.DashboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -11,7 +11,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -32,16 +31,14 @@ public class DashboardController {
     }
 
     @GetMapping("/organization/{organizationId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN')")
-    @Operation(summary = "Organization dashboard", description = "Returns organization-level metrics: branches, students, faculty, users, exams. Requires SUPER_ADMIN, ORG_ADMIN, or ADMIN role.")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ORG_ADMIN')")
+    @Operation(summary = "Organization dashboard", description = "Returns organization-level metrics across all branches. Requires SUPER_ADMIN or ORG_ADMIN; ADMINs use the branch dashboard.")
     @ApiResponse(responseCode = "200", description = "Organization metrics retrieved")
     @ApiResponse(responseCode = "403", description = "No access to this organization")
     @ApiResponse(responseCode = "404", description = "Organization not found")
     public ResponseEntity<OrgDashboardResponse> getOrgDashboard(
             @Parameter(description = "Organization ID") @PathVariable String organizationId) {
-        if (!CurrentUser.belongsToOrg(organizationId)) {
-            throw new AccessDeniedException("You do not have access to this organization");
-        }
+        AccessPolicy.assertOrg(organizationId);
         return ResponseEntity.ok(dashboardService.getOrgDashboard(organizationId));
     }
 
@@ -54,9 +51,8 @@ public class DashboardController {
     public ResponseEntity<BranchDashboardResponse> getBranchDashboard(
             @Parameter(description = "Organization ID") @PathVariable String organizationId,
             @Parameter(description = "Branch ID") @PathVariable String branchId) {
-        if (!CurrentUser.belongsToOrg(organizationId)) {
-            throw new AccessDeniedException("You do not have access to this organization");
-        }
+        AccessPolicy.assertOrg(organizationId);
+        AccessPolicy.assertBranch(branchId);
         return ResponseEntity.ok(dashboardService.getBranchDashboard(organizationId, branchId));
     }
 }

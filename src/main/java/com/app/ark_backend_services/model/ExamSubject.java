@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 @Data
+@CompoundIndex(name = "org_idx", def = "{'organizationId': 1}")
 @Document(collection = "exam_subjects")
 @CompoundIndexes({
     @CompoundIndex(name = "exam_subject_unique", def = "{'examinationId': 1, 'subjectName': 1, 'classId': 1}", unique = true),
@@ -31,6 +32,9 @@ public class ExamSubject {
     private String classId;
 
     private String subjectName;
+
+    /** Catalog id of the subject (null for records created before the catalog). */
+    private String subjectId;
 
     private String subjectCode;
 

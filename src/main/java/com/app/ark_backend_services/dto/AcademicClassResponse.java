@@ -15,6 +15,7 @@ public class AcademicClassResponse {
     private String name;
     private String section;
     private String academicYear;
+    private String academicYearId;
     private Integer capacity;
     private String description;
     private ClassStatus status;
@@ -29,6 +30,7 @@ public class AcademicClassResponse {
         response.setName(ac.getName());
         response.setSection(ac.getSection());
         response.setAcademicYear(ac.getAcademicYear());
+        response.setAcademicYearId(ac.getAcademicYearId());
         response.setCapacity(ac.getCapacity());
         response.setDescription(ac.getDescription());
         response.setStatus(ac.getStatus());

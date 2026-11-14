@@ -49,7 +49,7 @@ public class StudentEnrollmentController {
             @Parameter(description = "Organization ID") @PathVariable String organizationId,
             @Parameter(description = "Branch ID") @PathVariable String branchId,
             @Parameter(description = "Student ID") @PathVariable String studentId) {
-        return ResponseEntity.ok(enrollmentService.getActiveEnrollment(organizationId, studentId));
+        return ResponseEntity.ok(enrollmentService.getActiveEnrollment(organizationId, branchId, studentId));
     }
 
     @GetMapping("/student/{studentId}/history")
@@ -59,7 +59,7 @@ public class StudentEnrollmentController {
             @Parameter(description = "Organization ID") @PathVariable String organizationId,
             @Parameter(description = "Branch ID") @PathVariable String branchId,
             @Parameter(description = "Student ID") @PathVariable String studentId) {
-        return ResponseEntity.ok(enrollmentService.getEnrollmentHistory(organizationId, studentId));
+        return ResponseEntity.ok(enrollmentService.getEnrollmentHistory(organizationId, branchId, studentId));
     }
 
     @GetMapping("/class/{classId}")
@@ -70,7 +70,7 @@ public class StudentEnrollmentController {
             @Parameter(description = "Branch ID") @PathVariable String branchId,
             @Parameter(description = "Class ID") @PathVariable String classId,
             @SortDefault(sort = "enrolledAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ResponseEntity.ok(enrollmentService.getEnrollmentsByClass(organizationId, classId, pageable));
+        return ResponseEntity.ok(enrollmentService.getEnrollmentsByClass(organizationId, branchId, classId, pageable));
     }
 
     @GetMapping
@@ -84,6 +84,19 @@ public class StudentEnrollmentController {
         return ResponseEntity.ok(enrollmentService.getEnrollmentsByBranchAndYear(organizationId, branchId, academicYear, pageable));
     }
 
+    @PutMapping("/{enrollmentId}/reopen")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN')")
+    @Operation(summary = "Reopen enrollment", description = "Reopens a closed enrollment. Only the student's latest enrollment can be reopened, and only if they have no active enrollment.")
+    @ApiResponse(responseCode = "200", description = "Enrollment reopened")
+    @ApiResponse(responseCode = "404", description = "Enrollment not found")
+    @ApiResponse(responseCode = "409", description = "Enrollment cannot be reopened")
+    public ResponseEntity<StudentEnrollmentResponse> reopenEnrollment(
+            @Parameter(description = "Organization ID") @PathVariable String organizationId,
+            @Parameter(description = "Branch ID") @PathVariable String branchId,
+            @Parameter(description = "Enrollment ID") @PathVariable String enrollmentId) {
+        return ResponseEntity.ok(enrollmentService.reopenEnrollment(organizationId, branchId, enrollmentId));
+    }
+
     @PutMapping("/{enrollmentId}/close")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN')")
     @Operation(summary = "Close enrollment", description = "Marks an enrollment as COMPLETED with an exit reason (PROMOTED, GRADUATED, HELD_BACK, TRANSFERRED, DROPPED).")
@@ -95,6 +108,6 @@ public class StudentEnrollmentController {
             @Parameter(description = "Branch ID") @PathVariable String branchId,
             @Parameter(description = "Enrollment ID") @PathVariable String enrollmentId,
             @Valid @RequestBody CloseEnrollmentRequest request) {
-        return ResponseEntity.ok(enrollmentService.closeEnrollment(organizationId, enrollmentId, request));
+        return ResponseEntity.ok(enrollmentService.closeEnrollment(organizationId, branchId, enrollmentId, request));
     }
 }

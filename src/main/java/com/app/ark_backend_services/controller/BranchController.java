@@ -54,7 +54,11 @@ public class BranchController {
     @ApiResponse(responseCode = "200", description = "Branches retrieved")
     public ResponseEntity<Page<BranchResponse>> getAll(
             @Parameter(description = "Organization ID") @PathVariable String organizationId,
+            @Parameter(description = "Search text: prefix match on name, email and id fields") @RequestParam(required = false) String q,
             @SortDefault(sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
+        if (q != null && !q.isBlank()) {
+            return ResponseEntity.ok(branchService.search(organizationId, q, pageable));
+        }
         return ResponseEntity.ok(branchService.getAllByOrganization(organizationId, pageable));
     }
 

@@ -15,7 +15,9 @@ import java.time.Instant;
 @CompoundIndexes({
     @CompoundIndex(name = "result_unique", def = "{'examSubjectId': 1, 'studentId': 1}", unique = true),
     @CompoundIndex(name = "exam_student", def = "{'examinationId': 1, 'studentId': 1}"),
-    @CompoundIndex(name = "org_exam", def = "{'organizationId': 1, 'examinationId': 1}")
+    @CompoundIndex(name = "org_exam", def = "{'organizationId': 1, 'examinationId': 1}"),
+        @CompoundIndex(name = "student_idx", def = "{'studentId': 1}"),
+        @CompoundIndex(name = "exam_class_idx", def = "{'examinationId': 1, 'classId': 1}")
 })
 public class ExamResult {
 

@@ -35,20 +35,7 @@ public class AuditLogController {
             @Parameter(description = "Filter by user ID who performed the action") @RequestParam(required = false) String userId,
             @SortDefault(sort = "timestamp", direction = Sort.Direction.DESC) Pageable pageable) {
 
-        Page<AuditLogResponse> result;
-
-        if (organizationId != null) {
-            result = auditLogService.getByOrganization(organizationId, pageable);
-        } else if (action != null) {
-            result = auditLogService.getByAction(action, pageable);
-        } else if (entityType != null) {
-            result = auditLogService.getByEntityType(entityType, pageable);
-        } else if (userId != null) {
-            result = auditLogService.getByUser(userId, pageable);
-        } else {
-            result = auditLogService.getAll(pageable);
-        }
-
-        return ResponseEntity.ok(result);
+        // All provided filters are combined
+        return ResponseEntity.ok(auditLogService.search(organizationId, action, entityType, userId, pageable));
     }
 }

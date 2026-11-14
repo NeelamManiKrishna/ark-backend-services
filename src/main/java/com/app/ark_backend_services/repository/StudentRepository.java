@@ -15,7 +15,9 @@ public interface StudentRepository extends MongoRepository<Student, String> {
 
     Page<Student> findByOrganizationIdAndBranchId(String organizationId, String branchId, Pageable pageable);
 
-    Page<Student> findByOrganizationIdAndClassId(String organizationId, String classId, Pageable pageable);
+    Page<Student> findByIdInAndOrganizationId(java.util.Collection<String> ids, String organizationId, Pageable pageable);
+
+    Page<Student> findByIdInAndOrganizationIdAndBranchId(java.util.Collection<String> ids, String organizationId, String branchId, Pageable pageable);
 
     Optional<Student> findByIdAndOrganizationId(String id, String organizationId);
 
@@ -35,7 +37,6 @@ public interface StudentRepository extends MongoRepository<Student, String> {
 
     long countByOrganizationIdAndBranchIdAndGender(String organizationId, String branchId, String gender);
 
-    long countByOrganizationIdAndClassId(String organizationId, String classId);
 
     void deleteByOrganizationId(String organizationId);
 

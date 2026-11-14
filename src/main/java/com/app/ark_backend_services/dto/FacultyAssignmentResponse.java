@@ -17,7 +17,9 @@ public class FacultyAssignmentResponse {
     private String facultyId;
     private String classId;
     private String subjectName;
+    private String subjectId;
     private String academicYear;
+    private String academicYearId;
     private AssignmentType assignmentType;
     private AssignmentStatus status;
     private Instant createdAt;
@@ -32,7 +34,9 @@ public class FacultyAssignmentResponse {
         response.setFacultyId(assignment.getFacultyId());
         response.setClassId(assignment.getClassId());
         response.setSubjectName(assignment.getSubjectName());
+        response.setSubjectId(assignment.getSubjectId());
         response.setAcademicYear(assignment.getAcademicYear());
+        response.setAcademicYearId(assignment.getAcademicYearId());
         response.setAssignmentType(assignment.getAssignmentType());
         response.setStatus(assignment.getStatus());
         response.setCreatedAt(assignment.getCreatedAt());

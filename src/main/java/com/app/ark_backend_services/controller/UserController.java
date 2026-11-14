@@ -57,7 +57,11 @@ public class UserController {
     public ResponseEntity<Page<UserResponse>> getAll(
             @Parameter(description = "Organization ID") @PathVariable String organizationId,
             @Parameter(description = "Filter by branch ID") @RequestParam(required = false) String branchId,
+            @Parameter(description = "Search text: prefix match on name, email and id fields") @RequestParam(required = false) String q,
             @SortDefault(sort = "fullName", direction = Sort.Direction.ASC) Pageable pageable) {
+        if (q != null && !q.isBlank()) {
+            return ResponseEntity.ok(userService.search(organizationId, branchId, q, pageable));
+        }
         return ResponseEntity.ok(userService.getAll(organizationId, branchId, pageable));
     }
 

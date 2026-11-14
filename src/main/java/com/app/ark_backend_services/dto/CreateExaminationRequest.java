@@ -13,8 +13,10 @@ public class CreateExaminationRequest {
     @NotBlank(message = "Exam name is required")
     private String name;
 
-    @NotBlank(message = "Academic year is required")
     private String academicYear;
+
+    /** Alternative to academicYear: id from the academic year catalog. */
+    private String academicYearId;
 
     @NotNull(message = "Exam type is required")
     private ExamType examType;

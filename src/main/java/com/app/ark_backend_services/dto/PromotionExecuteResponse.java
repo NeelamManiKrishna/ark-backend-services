@@ -22,6 +22,8 @@ public class PromotionExecuteResponse {
         private int promoted;
         private int graduated;
         private int heldBack;
+        /** Students left untouched because they already have an enrollment in the target year. */
+        private int skipped;
     }
 
     @Data

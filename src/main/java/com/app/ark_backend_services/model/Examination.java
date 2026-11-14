@@ -34,6 +34,8 @@ public class Examination {
 
     private String academicYear;
 
+    private String academicYearId;
+
     private ExamType examType;
 
     private LocalDate startDate;

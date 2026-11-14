@@ -27,6 +27,9 @@ public class AcademicClass {
 
     private String academicYear;
 
+    /** Catalog id of the academic year (null for records created before the catalog). */
+    private String academicYearId;
+
     private Integer capacity;
 
     private String description;

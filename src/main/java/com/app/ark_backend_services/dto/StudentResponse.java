@@ -1,7 +1,9 @@
 package com.app.ark_backend_services.dto;
 
+import com.app.ark_backend_services.security.AccessPolicy;
+import com.app.ark_backend_services.security.FieldEncryption;
 import com.app.ark_backend_services.model.Student;
-import com.app.ark_backend_services.model.Student.GovtIdType;
+import com.app.ark_backend_services.model.GovtIdType;
 import com.app.ark_backend_services.model.Student.StudentStatus;
 import lombok.Data;
 
@@ -15,7 +17,6 @@ public class StudentResponse {
     private String arkId;
     private String organizationId;
     private String branchId;
-    private String classId;
     private String rollNumber;
     private String firstName;
     private String lastName;
@@ -43,7 +44,6 @@ public class StudentResponse {
         response.setArkId(student.getArkId());
         response.setOrganizationId(student.getOrganizationId());
         response.setBranchId(student.getBranchId());
-        response.setClassId(student.getClassId());
         response.setRollNumber(student.getRollNumber());
         response.setFirstName(student.getFirstName());
         response.setLastName(student.getLastName());
@@ -59,7 +59,9 @@ public class StudentResponse {
         response.setGuardianPhone(student.getGuardianPhone());
         response.setGuardianEmail(student.getGuardianEmail());
         response.setGovtIdType(student.getGovtIdType());
-        response.setGovtIdNumber(student.getGovtIdNumber());
+        // USER (read-only) role never sees the full government ID
+        response.setGovtIdNumber(AccessPolicy.shouldMaskSensitive()
+                ? FieldEncryption.mask(student.getGovtIdNumber()) : student.getGovtIdNumber());
         response.setEnrollmentDate(student.getEnrollmentDate());
         response.setStatus(student.getStatus());
         response.setCreatedAt(student.getCreatedAt());

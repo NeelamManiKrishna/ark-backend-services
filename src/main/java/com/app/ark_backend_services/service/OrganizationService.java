@@ -1,5 +1,6 @@
 package com.app.ark_backend_services.service;
 
+import com.app.ark_backend_services.util.AuditSnapshot;
 import com.app.ark_backend_services.dto.CreateOrganizationRequest;
 import com.app.ark_backend_services.dto.OrganizationResponse;
 import com.app.ark_backend_services.dto.UpdateOrganizationRequest;
@@ -10,11 +11,13 @@ import com.app.ark_backend_services.model.Organization.OrganizationStatus;
 import com.app.ark_backend_services.repository.*;
 import com.app.ark_backend_services.model.AuditLog.Action;
 import com.app.ark_backend_services.util.ArkIdGenerator;
+import com.app.ark_backend_services.security.AccessPolicy;
+import com.app.ark_backend_services.security.CurrentUser;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +35,8 @@ public class OrganizationService {
     private final StudentEnrollmentRepository enrollmentRepository;
     private final FacultyAssignmentRepository assignmentRepository;
     private final ClassProgressionRepository progressionRepository;
+    private final AcademicYearRepository academicYearRepository;
+    private final SubjectRepository subjectRepository;
     private final AuditLogService auditLogService;
 
     public OrganizationResponse create(CreateOrganizationRequest request) {
@@ -65,8 +70,13 @@ public class OrganizationService {
     }
 
     public OrganizationResponse update(String id, UpdateOrganizationRequest request) {
+        AccessPolicy.assertOrg(id);
+        if (request.getStatus() != null && !CurrentUser.isSuperAdmin()) {
+            throw new AccessDeniedException("Only Super Admins can change organization status");
+        }
         Organization org = organizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Organization not found with id: " + id));
+        var auditBefore = AuditSnapshot.of(org);
 
         if (request.getName() != null && !request.getName().equals(org.getName())) {
             if (organizationRepository.existsByName(request.getName())) {
@@ -95,15 +105,19 @@ public class OrganizationService {
         }
 
         OrganizationResponse response = OrganizationResponse.from(organizationRepository.save(org));
-        auditLogService.log(Action.UPDATE, "Organization", id, org.getName(), id, "Organization updated");
+        auditLogService.logChange(Action.UPDATE, "Organization", id, org.getName(), id, "Organization updated", auditBefore, AuditSnapshot.of(org));
         return response;
     }
 
-    @Transactional
     public void delete(String id) {
         if (!organizationRepository.existsById(id)) {
             throw new ResourceNotFoundException("Organization not found with id: " + id);
         }
+        String cascade = auditLogService.countCascade(org.springframework.data.mongodb.core.query.Query.query(
+                org.springframework.data.mongodb.core.query.Criteria.where("organizationId").is(id)),
+                "users", "student_enrollments", "faculty_assignments", "class_progressions", "exam_results", "exam_subjects", "examinations", "faculty", "students", "academic_classes", "academic_years", "subjects", "branches");
+        academicYearRepository.deleteByOrganizationId(id);
+        subjectRepository.deleteByOrganizationId(id);
         userRepository.deleteByOrganizationId(id);
         enrollmentRepository.deleteByOrganizationId(id);
         assignmentRepository.deleteByOrganizationId(id);
@@ -115,7 +129,7 @@ public class OrganizationService {
         studentRepository.deleteByOrganizationId(id);
         academicClassRepository.deleteByOrganizationId(id);
         branchRepository.deleteByOrganizationId(id);
-        auditLogService.log(Action.DELETE, "Organization", id, null, id, "Organization deleted with all related data");
         organizationRepository.deleteById(id);
+        auditLogService.log(Action.DELETE, "Organization", id, null, id, "Organization deleted with all related data: " + cascade);
     }
 }

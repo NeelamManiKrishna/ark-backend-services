@@ -1,0 +1,7 @@
+app:
+  jwt:
+    secret: test-only-jwt-secret-key-must-be-at-least-256-bits-long-1234
+  cors:
+    allowed-origins: http://localhost:3000
+  encryption:
+    field-key: ZGV2LW9ubHktMzItYnl0ZS1hZXMta2V5LTEyMzQ1Njc=

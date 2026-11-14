@@ -1,6 +1,6 @@
 package com.app.ark_backend_services.dto;
 
-import com.app.ark_backend_services.model.Student.GovtIdType;
+import com.app.ark_backend_services.model.GovtIdType;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -18,6 +18,9 @@ public class CreateStudentRequest {
 
     private String academicYear;
 
+    /** Alternative to academicYear for the initial enrollment: id from the academic year catalog. */
+    private String academicYearId;
+
     private String rollNumber;
 
     @NotBlank(message = "First name is required")
@@ -30,6 +33,7 @@ public class CreateStudentRequest {
     private String email;
     private String phone;
     private LocalDate dateOfBirth;
+    /** MALE, FEMALE or OTHER (case-insensitive; stored upper-case). */
     private String gender;
     private String address;
     private String city;

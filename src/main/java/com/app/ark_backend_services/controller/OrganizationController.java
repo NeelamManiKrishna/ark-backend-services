@@ -3,7 +3,7 @@ package com.app.ark_backend_services.controller;
 import com.app.ark_backend_services.dto.CreateOrganizationRequest;
 import com.app.ark_backend_services.dto.OrganizationResponse;
 import com.app.ark_backend_services.dto.UpdateOrganizationRequest;
-import com.app.ark_backend_services.security.CurrentUser;
+import com.app.ark_backend_services.security.AccessPolicy;
 import com.app.ark_backend_services.service.OrganizationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -43,9 +43,7 @@ public class OrganizationController {
     @ApiResponse(responseCode = "403", description = "Access denied — not your organization")
     @ApiResponse(responseCode = "404", description = "Organization not found")
     public ResponseEntity<OrganizationResponse> getById(@Parameter(description = "Organization ID") @PathVariable String id) {
-        if (!CurrentUser.isSuperAdmin() && !CurrentUser.belongsToOrg(id)) {
-            throw new org.springframework.security.access.AccessDeniedException("You can only view your own organization");
-        }
+        AccessPolicy.assertOrg(id);
         return ResponseEntity.ok(organizationService.getById(id));
     }
 
@@ -59,8 +57,8 @@ public class OrganizationController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "Update organization", description = "Partially updates an organization. Only non-null fields are applied. Requires SUPER_ADMIN role.")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ORG_ADMIN')")
+    @Operation(summary = "Update organization", description = "Partially updates an organization. Only non-null fields are applied. SUPER_ADMIN may update any organization and its status; ORG_ADMIN may update only their own organization and not its status.")
     @ApiResponse(responseCode = "200", description = "Organization updated")
     @ApiResponse(responseCode = "404", description = "Organization not found")
     @ApiResponse(responseCode = "409", description = "Organization name already exists")

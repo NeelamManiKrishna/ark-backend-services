@@ -1,8 +1,14 @@
 spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   application:
     name: ark-backend-services
   mongodb:
-    uri: mongodb://admin:secret@localhost:27017/ark_web?authSource=admin
+    # Required outside the dev profile, e.g. mongodb://user:pass@host:27017/ark_web?authSource=admin
+    uri: ${MONGO_URI}
+  data:
+    mongodb:
+      auto-index-creation: true
   servlet:
     multipart:
       max-file-size: 5MB
@@ -10,6 +16,16 @@ spring:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:ark-jwt-secret-key-must-be-at-least-256-bits-long-for-hs256}
-    access-token-expiration: 3600000     # 1 hour
-    refresh-token-expiration: 604800000  # 7 days
+    # Required (>= 32 chars). No default on purpose; the dev profile supplies a local one.
+    secret: ${JWT_SECRET}
+    access-token-expiration: ${JWT_ACCESS_EXPIRATION_MS:1800000}              # 30 minutes
+    refresh-token-expiration: ${JWT_REFRESH_EXPIRATION_MS:604800000}          # 7 days (web)
+    device-refresh-token-expiration: ${JWT_DEVICE_REFRESH_EXPIRATION_MS:2592000000}  # 30 days (when deviceId is sent)
+  security:
+    max-failed-attempts: ${MAX_FAILED_ATTEMPTS:5}
+    lockout-minutes: ${LOCKOUT_MINUTES:15}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+  encryption:
+    # Base64-encoded 32-byte AES key for govtIdNumber. Required outside dev.
+    field-key: ${FIELD_ENCRYPTION_KEY}

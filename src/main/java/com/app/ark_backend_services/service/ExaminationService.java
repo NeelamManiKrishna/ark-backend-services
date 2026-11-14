@@ -17,14 +17,13 @@ import com.app.ark_backend_services.repository.ExamSubjectRepository;
 import com.app.ark_backend_services.repository.ExamResultRepository;
 import com.app.ark_backend_services.repository.StudentRepository;
 import com.app.ark_backend_services.repository.StudentEnrollmentRepository;
-import com.app.ark_backend_services.security.CurrentUser;
+import com.app.ark_backend_services.security.AccessPolicy;
+import com.app.ark_backend_services.util.AcademicYears;
 import com.app.ark_backend_services.util.ArkIdGenerator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -38,12 +37,17 @@ public class ExaminationService {
     private final StudentRepository studentRepository;
     private final StudentEnrollmentRepository enrollmentRepository;
     private final AuditLogService auditLogService;
+    private final CatalogResolver catalogResolver;
 
     // ===================== Examination CRUD =====================
 
     public ExaminationResponse createExamination(String organizationId, String branchId, CreateExaminationRequest request) {
-        validateOrgAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
+        AccessPolicy.assertBranch(branchId);
         validateBranchExists(organizationId, branchId);
+
+        var year = catalogResolver.year(organizationId, request.getAcademicYearId(), request.getAcademicYear());
+        request.setAcademicYear(year.label());
 
         if (examinationRepository.existsByOrganizationIdAndBranchIdAndAcademicYearAndName(
                 organizationId, branchId, request.getAcademicYear(), request.getName())) {
@@ -62,6 +66,7 @@ public class ExaminationService {
         exam.setBranchId(branchId);
         exam.setName(request.getName());
         exam.setAcademicYear(request.getAcademicYear());
+        exam.setAcademicYearId(year.id());
         exam.setExamType(request.getExamType());
         exam.setStartDate(request.getStartDate());
         exam.setEndDate(request.getEndDate());
@@ -75,31 +80,38 @@ public class ExaminationService {
     }
 
     public ExaminationResponse getExaminationById(String organizationId, String examId) {
-        validateOrgAccess(organizationId);
-        Examination exam = examinationRepository.findByIdAndOrganizationId(examId, organizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Examination not found: " + examId));
+        AccessPolicy.assertOrg(organizationId);
+        Examination exam = loadExam(organizationId, examId);
         return ExaminationResponse.from(exam);
     }
 
     public Page<ExaminationResponse> getExaminationsByBranch(String organizationId, String branchId, Pageable pageable) {
-        validateOrgAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
+        AccessPolicy.assertBranch(branchId);
         return examinationRepository.findByOrganizationIdAndBranchId(organizationId, branchId, pageable)
                 .map(ExaminationResponse::from);
     }
 
     public Page<ExaminationResponse> getExaminationsByBranchAndYear(String organizationId, String branchId, String academicYear, Pageable pageable) {
-        validateOrgAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
+        AccessPolicy.assertBranch(branchId);
         return examinationRepository.findByOrganizationIdAndBranchIdAndAcademicYear(organizationId, branchId, academicYear, pageable)
                 .map(ExaminationResponse::from);
     }
 
     public ExaminationResponse updateExamination(String organizationId, String examId, UpdateExaminationRequest request) {
-        validateOrgAccess(organizationId);
-        Examination exam = examinationRepository.findByIdAndOrganizationId(examId, organizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Examination not found: " + examId));
+        AccessPolicy.assertOrg(organizationId);
+        Examination exam = loadExam(organizationId, examId);
 
         if (request.getName() != null) exam.setName(request.getName());
-        if (request.getAcademicYear() != null) exam.setAcademicYear(request.getAcademicYear());
+        if (request.getAcademicYear() != null && !request.getAcademicYear().equals(exam.getAcademicYear())) {
+            AcademicYears.validate(request.getAcademicYear());
+            if (examSubjectRepository.countByExaminationId(examId) > 0) {
+                throw new IllegalStateException("Academic year cannot be changed once the exam has subjects or results");
+            }
+            exam.setAcademicYear(request.getAcademicYear());
+            exam.setAcademicYearId(catalogResolver.year(organizationId, null, request.getAcademicYear()).id());
+        }
         if (request.getExamType() != null) exam.setExamType(request.getExamType());
         if (request.getStartDate() != null) exam.setStartDate(request.getStartDate());
         if (request.getEndDate() != null) exam.setEndDate(request.getEndDate());
@@ -111,27 +123,27 @@ public class ExaminationService {
         return response;
     }
 
-    @Transactional
     public void deleteExamination(String organizationId, String examId) {
-        validateOrgAccess(organizationId);
-        Examination exam = examinationRepository.findByIdAndOrganizationId(examId, organizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Examination not found: " + examId));
+        AccessPolicy.assertOrg(organizationId);
+        Examination exam = loadExam(organizationId, examId);
         examResultRepository.deleteByExaminationId(examId);
         examSubjectRepository.deleteByExaminationId(examId);
+        examinationRepository.delete(exam);
         auditLogService.log(Action.DELETE, "Examination", examId, exam.getName(), organizationId,
                 "Examination deleted with subjects and results");
-        examinationRepository.delete(exam);
     }
 
     // ===================== Exam Subject CRUD =====================
 
     public ExamSubjectResponse createExamSubject(String organizationId, String examId, CreateExamSubjectRequest request) {
-        validateOrgAccess(organizationId);
-        Examination exam = examinationRepository.findByIdAndOrganizationId(examId, organizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Examination not found: " + examId));
+        AccessPolicy.assertOrg(organizationId);
+        Examination exam = loadExam(organizationId, examId);
 
         academicClassRepository.findByIdAndOrganizationIdAndBranchId(request.getClassId(), organizationId, exam.getBranchId())
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found: " + request.getClassId()));
+
+        var subject = catalogResolver.subject(organizationId, request.getSubjectId(), request.getSubjectName(), true);
+        request.setSubjectName(subject.name());
 
         if (examSubjectRepository.existsByExaminationIdAndSubjectNameAndClassId(examId, request.getSubjectName(), request.getClassId())) {
             throw new DuplicateResourceException("Subject '" + request.getSubjectName() + "' already exists for this exam and class");
@@ -147,6 +159,7 @@ public class ExaminationService {
         es.setBranchId(exam.getBranchId());
         es.setClassId(request.getClassId());
         es.setSubjectName(request.getSubjectName());
+        es.setSubjectId(subject.id());
         es.setSubjectCode(request.getSubjectCode());
         es.setMaxMarks(request.getMaxMarks());
         es.setPassingMarks(request.getPassingMarks());
@@ -160,20 +173,21 @@ public class ExaminationService {
     }
 
     public Page<ExamSubjectResponse> getExamSubjects(String organizationId, String examId, Pageable pageable) {
-        validateOrgAccess(organizationId);
-        examinationRepository.findByIdAndOrganizationId(examId, organizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Examination not found: " + examId));
+        AccessPolicy.assertOrg(organizationId);
+        loadExam(organizationId, examId);
         return examSubjectRepository.findByExaminationId(examId, pageable).map(ExamSubjectResponse::from);
     }
 
     public ExamSubjectResponse updateExamSubject(String organizationId, String examId, String subjectId, UpdateExamSubjectRequest request) {
-        validateOrgAccess(organizationId);
-        examinationRepository.findByIdAndOrganizationId(examId, organizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Examination not found: " + examId));
+        AccessPolicy.assertOrg(organizationId);
+        loadExam(organizationId, examId);
         ExamSubject es = examSubjectRepository.findByIdAndExaminationId(subjectId, examId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam subject not found: " + subjectId));
 
-        if (request.getSubjectName() != null) es.setSubjectName(request.getSubjectName());
+        if (request.getSubjectName() != null) {
+            es.setSubjectName(request.getSubjectName());
+            es.setSubjectId(catalogResolver.subject(organizationId, null, request.getSubjectName(), false).id());
+        }
         if (request.getSubjectCode() != null) es.setSubjectCode(request.getSubjectCode());
         if (request.getMaxMarks() != null) es.setMaxMarks(request.getMaxMarks());
         if (request.getPassingMarks() != null) es.setPassingMarks(request.getPassingMarks());
@@ -185,41 +199,49 @@ public class ExaminationService {
             throw new IllegalArgumentException("Passing marks (" + es.getPassingMarks() + ") cannot exceed max marks (" + es.getMaxMarks() + ")");
         }
 
+        boolean thresholdsChanged = request.getMaxMarks() != null || request.getPassingMarks() != null;
         ExamSubjectResponse response = ExamSubjectResponse.from(examSubjectRepository.save(es));
+        if (thresholdsChanged) {
+            int recomputed = recomputeResults(es);
+            if (recomputed > 0) {
+                auditLogService.log(Action.UPDATE, "ExamResult", subjectId, es.getSubjectName(), organizationId,
+                        "Recomputed grade/status of " + recomputed + " results after max/passing marks changed");
+            }
+        }
         auditLogService.log(Action.UPDATE, "ExamSubject", subjectId, es.getSubjectName(), organizationId, "Exam subject updated");
         return response;
     }
 
-    @Transactional
     public void deleteExamSubject(String organizationId, String examId, String subjectId) {
-        validateOrgAccess(organizationId);
-        examinationRepository.findByIdAndOrganizationId(examId, organizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Examination not found: " + examId));
+        AccessPolicy.assertOrg(organizationId);
+        loadExam(organizationId, examId);
         ExamSubject es = examSubjectRepository.findByIdAndExaminationId(subjectId, examId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam subject not found: " + subjectId));
         examResultRepository.deleteByExamSubjectId(subjectId);
-        auditLogService.log(Action.DELETE, "ExamSubject", subjectId, es.getSubjectName(), organizationId, "Exam subject deleted with results");
         examSubjectRepository.delete(es);
+        auditLogService.log(Action.DELETE, "ExamSubject", subjectId, es.getSubjectName(), organizationId, "Exam subject deleted with results");
     }
 
     // ===================== Exam Result CRUD =====================
 
     public ExamResultResponse createExamResult(String organizationId, String examId, String subjectId, CreateExamResultRequest request) {
-        validateOrgAccess(organizationId);
-        examinationRepository.findByIdAndOrganizationId(examId, organizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Examination not found: " + examId));
+        AccessPolicy.assertOrg(organizationId);
+        Examination exam = loadExam(organizationId, examId);
         ExamSubject es = examSubjectRepository.findByIdAndExaminationId(subjectId, examId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam subject not found: " + subjectId));
 
         studentRepository.findByIdAndOrganizationId(request.getStudentId(), organizationId)
+                .filter(st -> es.getBranchId() != null && es.getBranchId().equals(st.getBranchId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found: " + request.getStudentId()));
 
-        // Validate student's active enrollment matches the exam subject's class
-        java.util.Optional<StudentEnrollment> activeEnrollment = enrollmentRepository
-                .findByStudentIdAndStatus(request.getStudentId(), StudentEnrollment.EnrollmentStatus.ACTIVE);
-        if (activeEnrollment.isPresent() && !activeEnrollment.get().getClassId().equals(es.getClassId())) {
-            throw new IllegalArgumentException("Student's active enrollment is in class "
-                    + activeEnrollment.get().getClassId() + ", but exam subject belongs to class " + es.getClassId());
+        // The student must be enrolled, for the EXAM's academic year (not whatever is active today), in the subject's class
+        StudentEnrollment yearEnrollment = enrollmentRepository
+                .findByOrganizationIdAndStudentIdAndAcademicYear(organizationId, request.getStudentId(), exam.getAcademicYear())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Student has no enrollment for academic year " + exam.getAcademicYear()));
+        if (!yearEnrollment.getClassId().equals(es.getClassId())) {
+            throw new IllegalArgumentException("Student was enrolled in class " + yearEnrollment.getClassId()
+                    + " for " + exam.getAcademicYear() + ", but the exam subject belongs to class " + es.getClassId());
         }
 
         if (examResultRepository.existsByExamSubjectIdAndStudentId(subjectId, request.getStudentId())) {
@@ -230,8 +252,7 @@ public class ExaminationService {
             throw new IllegalArgumentException("Marks obtained cannot exceed max marks (" + es.getMaxMarks() + ")");
         }
 
-        // Use enrollment's classId if available, otherwise fall back to exam subject's classId
-        String resolvedClassId = activeEnrollment.map(StudentEnrollment::getClassId).orElse(es.getClassId());
+        String resolvedClassId = yearEnrollment.getClassId();
 
         ExamResult result = new ExamResult();
         result.setExaminationId(examId);
@@ -253,36 +274,35 @@ public class ExaminationService {
     }
 
     public Page<ExamResultResponse> getResultsBySubject(String organizationId, String examId, String subjectId, Pageable pageable) {
-        validateOrgAccess(organizationId);
-        examinationRepository.findByIdAndOrganizationId(examId, organizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Examination not found: " + examId));
-        return examResultRepository.findByExaminationId(examId, pageable).map(ExamResultResponse::from);
+        AccessPolicy.assertOrg(organizationId);
+        loadExam(organizationId, examId);
+        examSubjectRepository.findByIdAndExaminationId(subjectId, examId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam subject not found: " + subjectId));
+        return examResultRepository.findByExamSubjectId(subjectId, pageable).map(ExamResultResponse::from);
     }
 
     public Page<ExamResultResponse> getResultsByClass(String organizationId, String examId, String classId, Pageable pageable) {
-        validateOrgAccess(organizationId);
-        examinationRepository.findByIdAndOrganizationId(examId, organizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Examination not found: " + examId));
+        AccessPolicy.assertOrg(organizationId);
+        loadExam(organizationId, examId);
         return examResultRepository.findByExaminationIdAndClassId(examId, classId, pageable).map(ExamResultResponse::from);
     }
 
     public java.util.List<ExamResultResponse> getStudentResults(String organizationId, String examId, String studentId) {
-        validateOrgAccess(organizationId);
-        examinationRepository.findByIdAndOrganizationId(examId, organizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Examination not found: " + examId));
-        return examResultRepository.findByExaminationIdAndStudentId(examId, studentId)
-                .stream().map(ExamResultResponse::from).toList();
+        AccessPolicy.assertOrg(organizationId);
+        loadExam(organizationId, examId);
+        return examResultRepository.findByExaminationIdAndStudentId(examId, studentId, org.springframework.data.domain.PageRequest.of(0, 200))
+                .getContent().stream().map(ExamResultResponse::from).toList();
     }
 
     public ExamResultResponse updateExamResult(String organizationId, String examId, String resultId, UpdateExamResultRequest request) {
-        validateOrgAccess(organizationId);
-        examinationRepository.findByIdAndOrganizationId(examId, organizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Examination not found: " + examId));
+        AccessPolicy.assertOrg(organizationId);
+        loadExam(organizationId, examId);
         ExamResult result = examResultRepository.findByIdAndOrganizationId(resultId, organizationId)
+                .filter(r -> examId.equals(r.getExaminationId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Exam result not found: " + resultId));
 
         if (request.getMarksObtained() != null) {
-            ExamSubject es = examSubjectRepository.findById(result.getExamSubjectId())
+            ExamSubject es = examSubjectRepository.findByIdAndExaminationId(result.getExamSubjectId(), examId)
                     .orElseThrow(() -> new ResourceNotFoundException("Exam subject not found"));
             if (request.getMarksObtained() > es.getMaxMarks()) {
                 throw new IllegalArgumentException("Marks obtained cannot exceed max marks (" + es.getMaxMarks() + ")");
@@ -300,9 +320,44 @@ public class ExaminationService {
         return response;
     }
 
+    public void deleteExamResult(String organizationId, String examId, String resultId) {
+        AccessPolicy.assertOrg(organizationId);
+        loadExam(organizationId, examId);
+        ExamResult result = examResultRepository.findByIdAndOrganizationId(resultId, organizationId)
+                .filter(r -> examId.equals(r.getExaminationId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Exam result not found: " + resultId));
+        examResultRepository.delete(result);
+        auditLogService.log(Action.DELETE, "ExamResult", resultId, null, organizationId,
+                "Exam result deleted: student=" + result.getStudentId());
+    }
+
     // ===================== Helpers =====================
 
+    /** Re-derives grade and PASS/FAIL for results of a subject; ABSENT and WITHHELD are left alone. */
+    private int recomputeResults(ExamSubject es) {
+        java.util.List<ExamResult> existing = examResultRepository.findByExamSubjectId(es.getId());
+        java.util.List<ExamResult> changed = new java.util.ArrayList<>();
+        for (ExamResult r : existing) {
+            if (r.getMarksObtained() == null
+                    || r.getStatus() == ExamResult.ResultStatus.ABSENT
+                    || r.getStatus() == ExamResult.ResultStatus.WITHHELD) {
+                continue;
+            }
+            r.setGrade(calculateGrade(r.getMarksObtained(), es.getMaxMarks()));
+            r.setStatus(r.getMarksObtained() >= es.getPassingMarks()
+                    ? ExamResult.ResultStatus.PASS : ExamResult.ResultStatus.FAIL);
+            changed.add(r);
+        }
+        if (!changed.isEmpty()) {
+            examResultRepository.saveAll(changed);
+        }
+        return changed.size();
+    }
+
     private String calculateGrade(double marks, double maxMarks) {
+        if (maxMarks <= 0) {
+            return "F";
+        }
         double percentage = (marks / maxMarks) * 100;
         if (percentage >= 90) return "A+";
         if (percentage >= 80) return "A";
@@ -313,10 +368,13 @@ public class ExaminationService {
         return "F";
     }
 
-    private void validateOrgAccess(String organizationId) {
-        if (!CurrentUser.belongsToOrg(organizationId)) {
-            throw new AccessDeniedException("You do not have access to this organization");
-        }
+
+    /** Loads the exam inside the organization and enforces branch access for branch-scoped callers. */
+    private Examination loadExam(String organizationId, String examId) {
+        Examination exam = examinationRepository.findByIdAndOrganizationId(examId, organizationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Examination not found: " + examId));
+        AccessPolicy.assertBranch(exam.getBranchId());
+        return exam;
     }
 
     private void validateBranchExists(String organizationId, String branchId) {

@@ -1,0 +1,13 @@
+# Local development only. Activate with: ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+spring:
+  mongodb:
+    uri: mongodb://admin:secret@localhost:27017/ark_web?authSource=admin
+
+app:
+  jwt:
+    secret: ark-dev-only-jwt-secret-key-must-be-at-least-256-bits-long
+  cors:
+    allowed-origins: http://localhost:3000,http://localhost:5173
+  encryption:
+    # dev-only key (32 bytes, base64)
+    field-key: ZGV2LW9ubHktMzItYnl0ZS1hZXMta2V5LTEyMzQ1Njc=

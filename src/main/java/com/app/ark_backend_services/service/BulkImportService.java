@@ -5,18 +5,18 @@ import com.app.ark_backend_services.dto.BulkImportResponse.RowError;
 import com.app.ark_backend_services.exception.ResourceNotFoundException;
 import com.app.ark_backend_services.model.*;
 import com.app.ark_backend_services.model.AuditLog.Action;
-import com.app.ark_backend_services.model.Student.GovtIdType;
+import com.app.ark_backend_services.model.GovtIdType;
 import com.app.ark_backend_services.model.Student.StudentStatus;
 import com.app.ark_backend_services.model.StudentEnrollment.EnrollmentStatus;
 import com.app.ark_backend_services.repository.*;
-import com.app.ark_backend_services.security.CurrentUser;
+import com.app.ark_backend_services.security.AccessPolicy;
+import com.app.ark_backend_services.util.AcademicYears;
 import com.app.ark_backend_services.util.ArkIdGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -44,25 +44,35 @@ public class BulkImportService {
     private final StudentEnrollmentRepository enrollmentRepository;
     private final AuditLogService auditLogService;
 
+    /** Branches the caller may import into: all branches of the org, or only their own for branch-scoped roles. */
+    private Set<String> visibleBranchIds(String organizationId) {
+        Set<String> ids = branchRepository.findByOrganizationId(organizationId).stream()
+                .map(Branch::getId).collect(Collectors.toSet());
+        if (AccessPolicy.isBranchScoped()) {
+            ids.retainAll(AccessPolicy.scope().branchIds());
+        }
+        return ids;
+    }
+
     // ======================== STUDENTS ========================
 
+    /** A parsed row waiting to be saved: the student and its optional enrollment stay together. */
+    private record PendingStudent(int rowNum, Student student, StudentEnrollment enrollment) {}
+
     public BulkImportResponse importStudents(String organizationId, MultipartFile file) {
-        validateAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
         List<CSVRecord> records = parseFile(file);
 
-        // Pre-cache valid branch and class IDs
-        Set<String> validBranchIds = branchRepository.findByOrganizationId(organizationId).stream()
-                .map(Branch::getId).collect(Collectors.toSet());
-        Set<String> validClassIds = new HashSet<>();
+        // Pre-cache valid branches and, per class, the branch it belongs to
+        Set<String> validBranchIds = visibleBranchIds(organizationId);
+        Map<String, String> classBranch = new HashMap<>();
         for (String branchId : validBranchIds) {
             academicClassRepository.findByOrganizationIdAndBranchId(organizationId, branchId)
-                    .forEach(c -> validClassIds.add(c.getId()));
+                    .forEach(c -> classBranch.put(c.getId(), c.getBranchId()));
         }
 
         List<RowError> errors = new ArrayList<>();
-        // Pair each student with its optional enrollment (null if no enrollment needed)
-        List<Student> batch = new ArrayList<>();
-        List<StudentEnrollment> enrollmentBatch = new ArrayList<>(); // same size as batch, 1:1 mapping
+        List<PendingStudent> batch = new ArrayList<>();
         int success = 0;
 
         for (int i = 0; i < records.size(); i++) {
@@ -81,6 +91,27 @@ public class BulkImportService {
 
                 GovtIdType govtIdType = parseEnum(GovtIdType.class, govtIdTypeStr, "govtIdType");
 
+                // Validate the class and year BEFORE anything is added to the batch, so a bad row
+                // can never leave a student without its enrollment or shift later rows.
+                String classId = getOptional(rec, "classId");
+                String academicYear = getOptional(rec, "academicYear");
+                if ((classId == null) != (academicYear == null)) {
+                    throw new IllegalArgumentException("classId and academicYear must be provided together");
+                }
+                if (classId != null) {
+                    String classBranchId = classBranch.get(classId);
+                    if (classBranchId == null) {
+                        throw new IllegalArgumentException("Class not found: " + classId);
+                    }
+                    if (!classBranchId.equals(branchId)) {
+                        throw new IllegalArgumentException("Class " + classId + " does not belong to branch " + branchId);
+                    }
+                    AcademicYears.validate(academicYear);
+                }
+
+                validateEmail(getOptional(rec, "email"), "email");
+                validateEmail(getOptional(rec, "guardianEmail"), "guardianEmail");
+
                 Student student = new Student();
                 student.setArkId(ArkIdGenerator.generateStudentId());
                 student.setOrganizationId(organizationId);
@@ -90,7 +121,7 @@ public class BulkImportService {
                 student.setEmail(getOptional(rec, "email"));
                 student.setPhone(getOptional(rec, "phone"));
                 student.setDateOfBirth(parseDate(getOptional(rec, "dateOfBirth")));
-                student.setGender(getOptional(rec, "gender"));
+                student.setGender(com.app.ark_backend_services.util.Genders.normalize(getOptional(rec, "gender")));
                 student.setAddress(getOptional(rec, "address"));
                 student.setCity(getOptional(rec, "city"));
                 student.setState(getOptional(rec, "state"));
@@ -104,16 +135,9 @@ public class BulkImportService {
                 student.setEnrollmentDate(parseDate(getOptional(rec, "enrollmentDate")));
                 student.setStatus(StudentStatus.ACTIVE);
 
-                batch.add(student);
-
-                // Prepare enrollment if classId + academicYear provided
-                String classId = getOptional(rec, "classId");
-                String academicYear = getOptional(rec, "academicYear");
-                if (classId != null && academicYear != null) {
-                    if (!validClassIds.contains(classId)) {
-                        throw new IllegalArgumentException("Class not found: " + classId);
-                    }
-                    StudentEnrollment enrollment = new StudentEnrollment();
+                StudentEnrollment enrollment = null;
+                if (classId != null) {
+                    enrollment = new StudentEnrollment();
                     enrollment.setArkId(ArkIdGenerator.generateEnrollmentId());
                     enrollment.setOrganizationId(organizationId);
                     enrollment.setBranchId(branchId);
@@ -121,25 +145,23 @@ public class BulkImportService {
                     enrollment.setAcademicYear(academicYear);
                     enrollment.setEnrolledAt(student.getEnrollmentDate() != null ? student.getEnrollmentDate() : LocalDate.now());
                     enrollment.setStatus(EnrollmentStatus.ACTIVE);
-                    enrollmentBatch.add(enrollment);
-                } else {
-                    enrollmentBatch.add(null); // no enrollment for this student
                 }
 
-                success++;
+                batch.add(new PendingStudent(rowNum, student, enrollment));
 
                 if (batch.size() >= BATCH_SIZE) {
-                    flushStudentBatch(batch, enrollmentBatch);
+                    success += flushStudentBatch(batch, errors);
                 }
             } catch (Exception e) {
                 errors.add(new RowError(rowNum, e.getMessage()));
             }
         }
 
-        // Flush remaining
         if (!batch.isEmpty()) {
-            flushStudentBatch(batch, enrollmentBatch);
+            success += flushStudentBatch(batch, errors);
         }
+
+        errors.sort(java.util.Comparator.comparingInt(RowError::getRow));
 
         auditLogService.log(Action.CREATE, "Student", null, null, organizationId,
                 "Bulk import: " + success + "/" + records.size() + " students created");
@@ -154,38 +176,56 @@ public class BulkImportService {
                 .build();
     }
 
-    private void flushStudentBatch(List<Student> batch, List<StudentEnrollment> enrollmentBatch) {
-        List<Student> saved = studentRepository.saveAll(batch);
-
-        // batch and enrollmentBatch are 1:1 aligned — link enrollments to saved students
-        List<StudentEnrollment> enrollmentsToSave = new ArrayList<>();
-        for (int i = 0; i < saved.size(); i++) {
-            StudentEnrollment enrollment = enrollmentBatch.get(i);
-            if (enrollment != null) {
-                enrollment.setStudentId(saved.get(i).getId());
-                enrollmentsToSave.add(enrollment);
+    /**
+     * Saves a batch and returns how many rows were really persisted. If the bulk write fails (for example a
+     * duplicate key), rows are retried one by one so only the offending rows are reported, with their row numbers.
+     */
+    private int flushStudentBatch(List<PendingStudent> batch, List<RowError> errors) {
+        int saved = 0;
+        try {
+            List<Student> savedStudents = studentRepository.saveAll(batch.stream().map(PendingStudent::student).toList());
+            List<StudentEnrollment> enrollments = new ArrayList<>();
+            for (int i = 0; i < savedStudents.size(); i++) {
+                StudentEnrollment e = batch.get(i).enrollment();
+                if (e != null) {
+                    e.setStudentId(savedStudents.get(i).getId());
+                    enrollments.add(e);
+                }
+            }
+            if (!enrollments.isEmpty()) {
+                enrollmentRepository.saveAll(enrollments);
+            }
+            saved = batch.size();
+        } catch (Exception bulkFailure) {
+            log.warn("Bulk student batch failed, retrying row by row: {}", bulkFailure.getMessage());
+            for (PendingStudent row : batch) {
+                try {
+                    Student st = row.student().getId() != null ? row.student() : studentRepository.save(row.student());
+                    if (row.enrollment() != null) {
+                        row.enrollment().setStudentId(st.getId());
+                        enrollmentRepository.save(row.enrollment());
+                    }
+                    saved++;
+                } catch (Exception rowFailure) {
+                    errors.add(new RowError(row.rowNum(), "Could not save row: " + rowFailure.getMessage()));
+                }
             }
         }
-
-        if (!enrollmentsToSave.isEmpty()) {
-            enrollmentRepository.saveAll(enrollmentsToSave);
-        }
-
         batch.clear();
-        enrollmentBatch.clear();
+        return saved;
     }
 
     // ======================== FACULTY ========================
 
     public BulkImportResponse importFaculty(String organizationId, MultipartFile file) {
-        validateAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
         List<CSVRecord> records = parseFile(file);
 
-        Set<String> validBranchIds = branchRepository.findByOrganizationId(organizationId).stream()
-                .map(Branch::getId).collect(Collectors.toSet());
+        Set<String> validBranchIds = visibleBranchIds(organizationId);
 
         List<RowError> errors = new ArrayList<>();
         List<Faculty> batch = new ArrayList<>();
+        Set<String> seenEmployeeIds = new HashSet<>();
         int success = 0;
 
         for (int i = 0; i < records.size(); i++) {
@@ -202,7 +242,16 @@ public class BulkImportService {
                     throw new IllegalArgumentException("Branch not found: " + branchId);
                 }
 
-                Faculty.GovtIdType govtIdType = parseEnum(Faculty.GovtIdType.class, govtIdTypeStr, "govtIdType");
+                GovtIdType govtIdType = parseEnum(GovtIdType.class, govtIdTypeStr, "govtIdType");
+
+                validateEmail(getOptional(rec, "email"), "email");
+                String employeeId = getOptional(rec, "employeeId");
+                if (employeeId != null) {
+                    if (!seenEmployeeIds.add(employeeId)
+                            || facultyRepository.existsByOrganizationIdAndEmployeeId(organizationId, employeeId)) {
+                        throw new IllegalArgumentException("Duplicate employeeId: " + employeeId);
+                    }
+                }
 
                 Faculty faculty = new Faculty();
                 faculty.setArkId(ArkIdGenerator.generateFacultyId());
@@ -213,7 +262,7 @@ public class BulkImportService {
                 faculty.setEmail(getOptional(rec, "email"));
                 faculty.setPhone(getOptional(rec, "phone"));
                 faculty.setDateOfBirth(parseDate(getOptional(rec, "dateOfBirth")));
-                faculty.setGender(getOptional(rec, "gender"));
+                faculty.setGender(com.app.ark_backend_services.util.Genders.normalize(getOptional(rec, "gender")));
                 faculty.setAddress(getOptional(rec, "address"));
                 faculty.setCity(getOptional(rec, "city"));
                 faculty.setState(getOptional(rec, "state"));
@@ -260,11 +309,10 @@ public class BulkImportService {
     // ======================== ACADEMIC CLASSES ========================
 
     public BulkImportResponse importAcademicClasses(String organizationId, MultipartFile file) {
-        validateAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
         List<CSVRecord> records = parseFile(file);
 
-        Set<String> validBranchIds = branchRepository.findByOrganizationId(organizationId).stream()
-                .map(Branch::getId).collect(Collectors.toSet());
+        Set<String> validBranchIds = visibleBranchIds(organizationId);
 
         // Pre-cache existing class keys to skip duplicates
         Set<String> existingKeys = new HashSet<>();
@@ -338,7 +386,7 @@ public class BulkImportService {
     // ======================== BRANCHES ========================
 
     public BulkImportResponse importBranches(String organizationId, MultipartFile file) {
-        validateAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
         List<CSVRecord> records = parseFile(file);
 
         // Pre-cache existing branch names
@@ -424,14 +472,6 @@ public class BulkImportService {
 
     // ======================== HELPERS ========================
 
-    private void validateAccess(String organizationId) {
-        if (!CurrentUser.belongsToOrg(organizationId)) {
-            throw new AccessDeniedException("You do not have access to this organization");
-        }
-        if (!organizationRepository.existsById(organizationId)) {
-            throw new ResourceNotFoundException("Organization not found: " + organizationId);
-        }
-    }
 
     private List<CSVRecord> parseFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
@@ -471,6 +511,15 @@ public class BulkImportService {
             throw new IllegalArgumentException("Row " + rowNum + ": " + column + " is required");
         }
         return value.trim();
+    }
+
+    private static final java.util.regex.Pattern EMAIL_PATTERN =
+            java.util.regex.Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+
+    private void validateEmail(String value, String column) {
+        if (value != null && !EMAIL_PATTERN.matcher(value).matches()) {
+            throw new IllegalArgumentException(column + " must be a valid email address: " + value);
+        }
     }
 
     private String getOptional(CSVRecord rec, String column) {
