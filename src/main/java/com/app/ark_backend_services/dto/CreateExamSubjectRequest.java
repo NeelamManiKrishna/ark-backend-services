@@ -13,8 +13,10 @@ public class CreateExamSubjectRequest {
     @NotBlank
     private String classId;
 
-    @NotBlank
     private String subjectName;
+
+    /** Alternative to subjectName: id from the subject catalog. */
+    private String subjectId;
 
     private String subjectCode;
 

@@ -1,6 +1,9 @@
 package com.app.ark_backend_services.model;
 
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import com.app.ark_backend_services.security.EncryptedStringConverter;
 import lombok.Data;
+import org.springframework.data.convert.ValueConverter;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -11,6 +14,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 @Data
+@CompoundIndex(name = "org_branch_idx", def = "{'organizationId': 1, 'branchId': 1}")
+@CompoundIndex(name = "org_status_idx", def = "{'organizationId': 1, 'status': 1}")
 @Document(collection = "students")
 public class Student {
 
@@ -23,9 +28,6 @@ public class Student {
     private String organizationId;
 
     private String branchId;
-
-    @Deprecated // Use StudentEnrollment as source of truth; kept for backward compatibility (dual-write)
-    private String classId;
 
     private String rollNumber;
 
@@ -57,6 +59,7 @@ public class Student {
 
     private GovtIdType govtIdType;
 
+    @ValueConverter(EncryptedStringConverter.class)
     private String govtIdNumber;
 
     private LocalDate enrollmentDate;
@@ -74,9 +77,5 @@ public class Student {
 
     public enum StudentStatus {
         ACTIVE, INACTIVE, GRADUATED, TRANSFERRED, DROPPED
-    }
-
-    public enum GovtIdType {
-        AADHAAR, PAN, PASSPORT, DRIVING_LICENSE, VOTER_ID, OTHER
     }
 }

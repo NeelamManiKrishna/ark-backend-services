@@ -15,6 +15,8 @@ public interface FacultyRepository extends MongoRepository<Faculty, String> {
 
     Page<Faculty> findByOrganizationIdAndDepartment(String organizationId, String department, Pageable pageable);
 
+    Page<Faculty> findByOrganizationIdAndBranchIdAndDepartment(String organizationId, String branchId, String department, Pageable pageable);
+
     Optional<Faculty> findByIdAndOrganizationId(String id, String organizationId);
 
     boolean existsByOrganizationIdAndEmployeeId(String organizationId, String employeeId);

@@ -58,7 +58,11 @@ public class AcademicClassController {
     public ResponseEntity<Page<AcademicClassResponse>> getAll(
             @Parameter(description = "Organization ID") @PathVariable String organizationId,
             @Parameter(description = "Branch ID") @PathVariable String branchId,
+            @Parameter(description = "Search text: prefix match on name, email and id fields") @RequestParam(required = false) String q,
             @SortDefault(sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
+        if (q != null && !q.isBlank()) {
+            return ResponseEntity.ok(academicClassService.searchByBranch(organizationId, branchId, q, pageable));
+        }
         return ResponseEntity.ok(academicClassService.getAllByBranch(organizationId, branchId, pageable));
     }
 

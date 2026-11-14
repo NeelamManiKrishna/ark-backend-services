@@ -197,6 +197,19 @@ public class ExaminationController {
         return ResponseEntity.ok(examinationService.getStudentResults(organizationId, examId, studentId));
     }
 
+    @DeleteMapping("/examinations/{examId}/results/{resultId}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN')")
+    @Operation(summary = "Delete exam result", description = "Deletes a single exam result.")
+    @ApiResponse(responseCode = "204", description = "Exam result deleted")
+    @ApiResponse(responseCode = "404", description = "Examination or result not found")
+    public ResponseEntity<Void> deleteExamResult(
+            @Parameter(description = "Organization ID") @PathVariable String organizationId,
+            @Parameter(description = "Examination ID") @PathVariable String examId,
+            @Parameter(description = "Exam Result ID") @PathVariable String resultId) {
+        examinationService.deleteExamResult(organizationId, examId, resultId);
+        return ResponseEntity.noContent().build();
+    }
+
     @PutMapping("/examinations/{examId}/results/{resultId}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN')")
     @Operation(summary = "Update exam result", description = "Updates an exam result. If marks are changed, grade and pass/fail status are auto-recalculated.")

@@ -1,8 +1,10 @@
 package com.app.ark_backend_services.dto;
 
+import com.app.ark_backend_services.security.AccessPolicy;
+import com.app.ark_backend_services.security.FieldEncryption;
 import com.app.ark_backend_services.model.Faculty;
 import com.app.ark_backend_services.model.Faculty.FacultyStatus;
-import com.app.ark_backend_services.model.Faculty.GovtIdType;
+import com.app.ark_backend_services.model.GovtIdType;
 import lombok.Data;
 
 import java.time.Instant;
@@ -61,7 +63,9 @@ public class FacultyResponse {
         response.setSpecializations(faculty.getSpecializations());
         response.setJoiningDate(faculty.getJoiningDate());
         response.setGovtIdType(faculty.getGovtIdType());
-        response.setGovtIdNumber(faculty.getGovtIdNumber());
+        // USER (read-only) role never sees the full government ID
+        response.setGovtIdNumber(AccessPolicy.shouldMaskSensitive()
+                ? FieldEncryption.mask(faculty.getGovtIdNumber()) : faculty.getGovtIdNumber());
         response.setStatus(faculty.getStatus());
         response.setCreatedAt(faculty.getCreatedAt());
         response.setUpdatedAt(faculty.getUpdatedAt());

@@ -49,7 +49,7 @@ public class FacultyAssignmentController {
             @Parameter(description = "Organization ID") @PathVariable String organizationId,
             @Parameter(description = "Branch ID") @PathVariable String branchId,
             @Parameter(description = "Assignment ID") @PathVariable String assignmentId) {
-        return ResponseEntity.ok(assignmentService.getById(organizationId, assignmentId));
+        return ResponseEntity.ok(assignmentService.getById(organizationId, branchId, assignmentId));
     }
 
     @GetMapping("/faculty/{facultyId}/active")
@@ -59,7 +59,7 @@ public class FacultyAssignmentController {
             @Parameter(description = "Organization ID") @PathVariable String organizationId,
             @Parameter(description = "Branch ID") @PathVariable String branchId,
             @Parameter(description = "Faculty ID") @PathVariable String facultyId) {
-        return ResponseEntity.ok(assignmentService.getActiveByFaculty(organizationId, facultyId));
+        return ResponseEntity.ok(assignmentService.getActiveByFaculty(organizationId, branchId, facultyId));
     }
 
     @GetMapping("/faculty/{facultyId}")
@@ -70,7 +70,7 @@ public class FacultyAssignmentController {
             @Parameter(description = "Branch ID") @PathVariable String branchId,
             @Parameter(description = "Faculty ID") @PathVariable String facultyId,
             @SortDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ResponseEntity.ok(assignmentService.getAllByFaculty(organizationId, facultyId, pageable));
+        return ResponseEntity.ok(assignmentService.getAllByFaculty(organizationId, branchId, facultyId, pageable));
     }
 
     @GetMapping("/class/{classId}")
@@ -82,7 +82,7 @@ public class FacultyAssignmentController {
             @Parameter(description = "Class ID") @PathVariable String classId,
             @Parameter(description = "Academic year (e.g., 2025-2026)") @RequestParam String academicYear,
             @SortDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ResponseEntity.ok(assignmentService.getByClassAndYear(organizationId, classId, academicYear, pageable));
+        return ResponseEntity.ok(assignmentService.getByClassAndYear(organizationId, branchId, classId, academicYear, pageable));
     }
 
     @GetMapping
@@ -106,7 +106,7 @@ public class FacultyAssignmentController {
             @Parameter(description = "Branch ID") @PathVariable String branchId,
             @Parameter(description = "Assignment ID") @PathVariable String assignmentId,
             @Valid @RequestBody UpdateFacultyAssignmentRequest request) {
-        return ResponseEntity.ok(assignmentService.update(organizationId, assignmentId, request));
+        return ResponseEntity.ok(assignmentService.update(organizationId, branchId, assignmentId, request));
     }
 
     @DeleteMapping("/{assignmentId}")
@@ -118,7 +118,7 @@ public class FacultyAssignmentController {
             @Parameter(description = "Organization ID") @PathVariable String organizationId,
             @Parameter(description = "Branch ID") @PathVariable String branchId,
             @Parameter(description = "Assignment ID") @PathVariable String assignmentId) {
-        assignmentService.delete(organizationId, assignmentId);
+        assignmentService.delete(organizationId, branchId, assignmentId);
         return ResponseEntity.noContent().build();
     }
 }

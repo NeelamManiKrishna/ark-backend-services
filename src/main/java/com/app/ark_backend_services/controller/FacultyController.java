@@ -56,7 +56,11 @@ public class FacultyController {
             @Parameter(description = "Organization ID") @PathVariable String organizationId,
             @Parameter(description = "Filter by branch ID") @RequestParam(required = false) String branchId,
             @Parameter(description = "Filter by department") @RequestParam(required = false) String department,
+            @Parameter(description = "Search text: prefix match on name, email and id fields") @RequestParam(required = false) String q,
             @SortDefault(sort = "firstName", direction = Sort.Direction.ASC) Pageable pageable) {
+        if (q != null && !q.isBlank()) {
+            return ResponseEntity.ok(facultyService.search(organizationId, branchId, q, pageable));
+        }
         if (branchId != null) {
             return ResponseEntity.ok(facultyService.getAllByBranch(organizationId, branchId, pageable));
         }

@@ -39,6 +39,10 @@ public class FacultyAssignment {
 
     private String academicYear;
 
+    private String academicYearId;
+
+    private String subjectId;
+
     private AssignmentType assignmentType;
 
     private AssignmentStatus status;

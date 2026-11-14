@@ -11,8 +11,10 @@ public class CreateAcademicClassRequest {
 
     private String section;
 
-    @NotBlank(message = "Academic year is required")
     private String academicYear;
+
+    /** Alternative to academicYear: id from the academic year catalog. */
+    private String academicYearId;
 
     private Integer capacity;
     private String description;

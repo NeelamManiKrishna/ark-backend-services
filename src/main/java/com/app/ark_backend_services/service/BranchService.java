@@ -1,5 +1,6 @@
 package com.app.ark_backend_services.service;
 
+import com.app.ark_backend_services.util.AuditSnapshot;
 import com.app.ark_backend_services.dto.BranchResponse;
 import com.app.ark_backend_services.dto.CreateBranchRequest;
 import com.app.ark_backend_services.dto.UpdateBranchRequest;
@@ -20,14 +21,12 @@ import com.app.ark_backend_services.repository.StudentEnrollmentRepository;
 import com.app.ark_backend_services.repository.StudentRepository;
 import com.app.ark_backend_services.repository.UserRepository;
 import com.app.ark_backend_services.model.AuditLog.Action;
-import com.app.ark_backend_services.security.CurrentUser;
+import com.app.ark_backend_services.security.AccessPolicy;
 import com.app.ark_backend_services.util.ArkIdGenerator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -46,9 +45,10 @@ public class BranchService {
     private final FacultyAssignmentRepository assignmentRepository;
     private final ClassProgressionRepository progressionRepository;
     private final AuditLogService auditLogService;
+    private final SearchService searchService;
 
     public BranchResponse create(String organizationId, CreateBranchRequest request) {
-        validateOrgAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
         validateOrganizationExists(organizationId);
 
         if (branchRepository.existsByOrganizationIdAndName(organizationId, request.getName())) {
@@ -73,22 +73,32 @@ public class BranchService {
     }
 
     public BranchResponse getById(String organizationId, String branchId) {
-        validateOrgAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
+        AccessPolicy.assertBranch(branchId);
         Branch branch = branchRepository.findByIdAndOrganizationId(branchId, organizationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Branch not found with id: " + branchId));
         return BranchResponse.from(branch);
     }
 
     public Page<BranchResponse> getAllByOrganization(String organizationId, Pageable pageable) {
-        validateOrgAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
         validateOrganizationExists(organizationId);
+        String ownBranch = AccessPolicy.restrictBranch(null);
+        if (ownBranch != null) {
+            // Branch-scoped roles only see their own branch
+            var own = branchRepository.findByIdAndOrganizationId(ownBranch, organizationId)
+                    .map(b -> java.util.List.of(BranchResponse.from(b))).orElse(java.util.List.of());
+            return new org.springframework.data.domain.PageImpl<>(own, pageable, own.size());
+        }
         return branchRepository.findByOrganizationId(organizationId, pageable).map(BranchResponse::from);
     }
 
     public BranchResponse update(String organizationId, String branchId, UpdateBranchRequest request) {
-        validateOrgAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
+        AccessPolicy.assertBranch(branchId);
         Branch branch = branchRepository.findByIdAndOrganizationId(branchId, organizationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Branch not found with id: " + branchId));
+        var auditBefore = AuditSnapshot.of(branch);
 
         if (request.getName() != null && !request.getName().equals(branch.getName())) {
             if (branchRepository.existsByOrganizationIdAndName(organizationId, request.getName())) {
@@ -119,15 +129,18 @@ public class BranchService {
         }
 
         BranchResponse response = BranchResponse.from(branchRepository.save(branch));
-        auditLogService.log(Action.UPDATE, "Branch", branchId, branch.getName(), organizationId, "Branch updated");
+        auditLogService.logChange(Action.UPDATE, "Branch", branchId, branch.getName(), organizationId, "Branch updated", auditBefore, AuditSnapshot.of(branch));
         return response;
     }
 
-    @Transactional
     public void delete(String organizationId, String branchId) {
-        validateOrgAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
+        AccessPolicy.assertBranch(branchId);
         Branch branch = branchRepository.findByIdAndOrganizationId(branchId, organizationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Branch not found with id: " + branchId));
+        String cascade = auditLogService.countCascade(org.springframework.data.mongodb.core.query.Query.query(
+                org.springframework.data.mongodb.core.query.Criteria.where("organizationId").is(organizationId).and("branchId").is(branchId)),
+                "users", "student_enrollments", "faculty_assignments", "class_progressions", "exam_results", "exam_subjects", "examinations", "faculty", "students", "academic_classes");
         userRepository.deleteByOrganizationIdAndBranchId(organizationId, branchId);
         examResultRepository.deleteByOrganizationIdAndBranchId(organizationId, branchId);
         examSubjectRepository.deleteByOrganizationIdAndBranchId(organizationId, branchId);
@@ -138,19 +151,26 @@ public class BranchService {
         facultyRepository.deleteByOrganizationIdAndBranchId(organizationId, branchId);
         studentRepository.deleteByOrganizationIdAndBranchId(organizationId, branchId);
         academicClassRepository.deleteByOrganizationIdAndBranchId(organizationId, branchId);
-        auditLogService.log(Action.DELETE, "Branch", branchId, branch.getName(), organizationId, "Branch deleted with all related data");
         branchRepository.delete(branch);
+        auditLogService.log(Action.DELETE, "Branch", branchId, branch.getName(), organizationId, "Branch deleted with all related data: " + cascade);
     }
 
-    private void validateOrgAccess(String organizationId) {
-        if (!CurrentUser.belongsToOrg(organizationId)) {
-            throw new AccessDeniedException("You do not have access to this organization");
-        }
-    }
 
     private void validateOrganizationExists(String organizationId) {
         if (!organizationRepository.existsById(organizationId)) {
             throw new ResourceNotFoundException("Organization not found with id: " + organizationId);
         }
+    }
+
+    /** Prefix search ("q") over branch name, city and ARK id; branch-scoped callers only ever see their own branch. */
+    public Page<BranchResponse> search(String organizationId, String q, Pageable pageable) {
+        AccessPolicy.assertOrg(organizationId);
+        String ownBranch = AccessPolicy.restrictBranch(null);
+        org.springframework.data.mongodb.core.query.Criteria scope = org.springframework.data.mongodb.core.query.Criteria.where("organizationId").is(organizationId);
+        if (ownBranch != null) {
+            scope = scope.and("_id").is(ownBranch);
+        }
+        return searchService.search(Branch.class, scope, q,
+                java.util.List.of("name", "city", "arkId"), pageable, BranchResponse::from);
     }
 }

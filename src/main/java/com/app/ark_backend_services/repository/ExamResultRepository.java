@@ -16,7 +16,15 @@ public interface ExamResultRepository extends MongoRepository<ExamResult, String
 
     List<ExamResult> findByExaminationIdAndStudentId(String examinationId, String studentId);
 
+    Page<ExamResult> findByExaminationIdAndStudentId(String examinationId, String studentId, Pageable pageable);
+
     List<ExamResult> findByExamSubjectId(String examSubjectId);
+
+    List<ExamResult> findByExamSubjectIdIn(java.util.Collection<String> examSubjectIds);
+
+    List<ExamResult> findByExaminationIdIn(java.util.Collection<String> examinationIds);
+
+    Page<ExamResult> findByExamSubjectId(String examSubjectId, Pageable pageable);
 
     Page<ExamResult> findByExaminationId(String examinationId, Pageable pageable);
 

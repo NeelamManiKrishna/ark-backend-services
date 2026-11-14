@@ -12,6 +12,10 @@ public interface ExamSubjectRepository extends MongoRepository<ExamSubject, Stri
 
     Optional<ExamSubject> findByIdAndExaminationId(String id, String examinationId);
 
+    long countByExaminationId(String examinationId);
+
+    boolean existsByOrganizationIdAndClassId(String organizationId, String classId);
+
     Page<ExamSubject> findByExaminationId(String examinationId, Pageable pageable);
 
     List<ExamSubject> findByExaminationId(String examinationId);

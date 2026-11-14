@@ -14,8 +14,10 @@ public class CreateEnrollmentRequest {
     @NotBlank(message = "Class ID is required")
     private String classId;
 
-    @NotBlank(message = "Academic year is required")
     private String academicYear;
+
+    /** Alternative to academicYear: id from the academic year catalog. */
+    private String academicYearId;
 
     private LocalDate enrolledAt;
 }

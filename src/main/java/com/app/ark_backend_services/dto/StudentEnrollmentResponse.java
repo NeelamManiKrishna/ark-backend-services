@@ -18,6 +18,7 @@ public class StudentEnrollmentResponse {
     private String studentId;
     private String classId;
     private String academicYear;
+    private String academicYearId;
     private LocalDate enrolledAt;
     private LocalDate exitedAt;
     private ExitReason exitReason;
@@ -34,6 +35,7 @@ public class StudentEnrollmentResponse {
         response.setStudentId(enrollment.getStudentId());
         response.setClassId(enrollment.getClassId());
         response.setAcademicYear(enrollment.getAcademicYear());
+        response.setAcademicYearId(enrollment.getAcademicYearId());
         response.setEnrolledAt(enrollment.getEnrolledAt());
         response.setExitedAt(enrollment.getExitedAt());
         response.setExitReason(enrollment.getExitReason());

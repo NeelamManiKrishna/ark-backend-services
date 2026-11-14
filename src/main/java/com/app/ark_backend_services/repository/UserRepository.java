@@ -17,6 +17,9 @@ public interface UserRepository extends MongoRepository<User, String> {
 
     Page<User> findByOrganizationIdAndBranchId(String organizationId, String branchId, Pageable pageable);
 
+    Page<User> findByOrganizationIdAndBranchIdAndRoleIn(String organizationId, String branchId,
+                                                         java.util.Collection<User.Role> roles, Pageable pageable);
+
     Optional<User> findByIdAndOrganizationId(String id, String organizationId);
 
     long countByOrganizationId(String organizationId);

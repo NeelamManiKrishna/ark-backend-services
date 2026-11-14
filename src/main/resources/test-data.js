@@ -1,5 +1,5 @@
 // =============================================================
-// ARK Test Data - Comprehensive Seed Script (v3)
+// ARK Test Data - Comprehensive Seed Script (v4)
 // Run: docker exec mongodb mongosh -u admin -p secret --authenticationDatabase admin ark_web test-data.js
 // Or copy to container first:
 //   docker cp src/main/resources/test-data.js mongodb:/tmp/test-data.js
@@ -26,6 +26,10 @@ db.exam_results.drop();
 db.student_enrollments.drop();
 db.faculty_assignments.drop();
 db.class_progressions.drop();
+db.refresh_sessions.drop();
+db.academic_years.drop();
+db.subjects.drop();
+db.migrations.drop();
 
 // BCrypt hash of "Password@123"
 const bcryptHash = "$2a$10$0V4TSH2bEuUh/x6ctUj1teDES0mNyyfhYd9i6Mb5SHC0tuBF1qmJW";
@@ -231,7 +235,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
     rollNumber: "SA-001", firstName: "Emma", lastName: "Johnson",
     email: "emma.johnson@student.springfield.edu", phone: "+1-217-555-1001",
-    dateOfBirth: new Date("2016-03-15"), gender: "Female",
+    dateOfBirth: new Date("2016-03-15"), gender: "FEMALE",
     address: "12 Maple Street", city: "Springfield", state: "IL", zipCode: "62704",
     guardianName: "Robert Johnson", guardianPhone: "+1-217-555-1002", guardianEmail: "robert.j@email.com",
     govtIdType: "AADHAAR", govtIdNumber: "2345-6789-0123",
@@ -241,7 +245,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
     rollNumber: "SA-002", firstName: "Liam", lastName: "Williams",
     email: "liam.williams@student.springfield.edu", phone: "+1-217-555-1003",
-    dateOfBirth: new Date("2016-07-22"), gender: "Male",
+    dateOfBirth: new Date("2016-07-22"), gender: "MALE",
     address: "45 Oak Lane", city: "Springfield", state: "IL", zipCode: "62704",
     guardianName: "Sarah Williams", guardianPhone: "+1-217-555-1004", guardianEmail: "sarah.w@email.com",
     govtIdType: "AADHAAR", govtIdNumber: "3456-7890-1234",
@@ -251,7 +255,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
     rollNumber: "SA-003", firstName: "Aiden", lastName: "Clark",
     email: "aiden.clark@student.springfield.edu", phone: "+1-217-555-1005",
-    dateOfBirth: new Date("2016-09-11"), gender: "Male",
+    dateOfBirth: new Date("2016-09-11"), gender: "MALE",
     address: "89 Birch Court", city: "Springfield", state: "IL", zipCode: "62704",
     guardianName: "Kevin Clark", guardianPhone: "+1-217-555-1006", guardianEmail: "kevin.c@email.com",
     govtIdType: "PASSPORT", govtIdNumber: "P1234567",
@@ -261,7 +265,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
     rollNumber: "SA-004", firstName: "Olivia", lastName: "Brown",
     email: "olivia.brown@student.springfield.edu", phone: "+1-217-555-1007",
-    dateOfBirth: new Date("2016-11-08"), gender: "Female",
+    dateOfBirth: new Date("2016-11-08"), gender: "FEMALE",
     address: "78 Elm Drive", city: "Springfield", state: "IL", zipCode: "62704",
     guardianName: "James Brown", guardianPhone: "+1-217-555-1008", guardianEmail: "james.b@email.com",
     govtIdType: "AADHAAR", govtIdNumber: "4567-8901-2345",
@@ -272,7 +276,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
     rollNumber: "SA-005", firstName: "Noah", lastName: "Davis",
     email: "noah.davis@student.springfield.edu", phone: "+1-217-555-1009",
-    dateOfBirth: new Date("2015-05-30"), gender: "Male",
+    dateOfBirth: new Date("2015-05-30"), gender: "MALE",
     address: "123 Pine Road", city: "Springfield", state: "IL", zipCode: "62704",
     guardianName: "Michael Davis", guardianPhone: "+1-217-555-1010", guardianEmail: "michael.d@email.com",
     govtIdType: "AADHAAR", govtIdNumber: "5678-9012-3456",
@@ -282,7 +286,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
     rollNumber: "SA-006", firstName: "Charlotte", lastName: "Lee",
     email: "charlotte.lee@student.springfield.edu", phone: "+1-217-555-1011",
-    dateOfBirth: new Date("2015-02-14"), gender: "Female",
+    dateOfBirth: new Date("2015-02-14"), gender: "FEMALE",
     address: "55 Willow Way", city: "Springfield", state: "IL", zipCode: "62704",
     guardianName: "Daniel Lee", guardianPhone: "+1-217-555-1012", guardianEmail: "daniel.l@email.com",
     govtIdType: "PAN", govtIdNumber: "ABCDE1234F",
@@ -293,7 +297,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
     rollNumber: "SA-007", firstName: "Sophia", lastName: "Martinez",
     email: "sophia.martinez@student.springfield.edu", phone: "+1-217-555-1013",
-    dateOfBirth: new Date("2014-01-12"), gender: "Female",
+    dateOfBirth: new Date("2014-01-12"), gender: "FEMALE",
     address: "456 North Avenue", city: "Springfield", state: "IL", zipCode: "62704",
     guardianName: "Carlos Martinez", guardianPhone: "+1-217-555-1014", guardianEmail: "carlos.m@email.com",
     govtIdType: "AADHAAR", govtIdNumber: "6789-0123-4567",
@@ -304,7 +308,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[1].toString(),
     rollNumber: "SA-N001", firstName: "Jackson", lastName: "White",
     email: "jackson.white@student.springfield.edu", phone: "+1-217-555-1015",
-    dateOfBirth: new Date("2016-06-03"), gender: "Male",
+    dateOfBirth: new Date("2016-06-03"), gender: "MALE",
     address: "77 Cedar Lane", city: "Springfield", state: "IL", zipCode: "62707",
     guardianName: "Karen White", guardianPhone: "+1-217-555-1016", guardianEmail: "karen.w@email.com",
     govtIdType: "AADHAAR", govtIdNumber: "7890-1234-5678",
@@ -314,7 +318,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[1].toString(),
     rollNumber: "SA-N002", firstName: "Harper", lastName: "Young",
     email: "harper.young@student.springfield.edu", phone: "+1-217-555-1017",
-    dateOfBirth: new Date("2016-10-19"), gender: "Female",
+    dateOfBirth: new Date("2016-10-19"), gender: "FEMALE",
     address: "200 Spruce Street", city: "Springfield", state: "IL", zipCode: "62707",
     guardianName: "Andrew Young", guardianPhone: "+1-217-555-1018", guardianEmail: "andrew.y@email.com",
     govtIdType: "DRIVING_LICENSE", govtIdNumber: "DL-IL-98765",
@@ -325,7 +329,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[2].toString(),
     rollNumber: "RC-001", firstName: "Ethan", lastName: "Garcia",
     email: "ethan.garcia@student.riverside.edu", phone: "+1-512-555-2001",
-    dateOfBirth: new Date("2005-09-14"), gender: "Male",
+    dateOfBirth: new Date("2005-09-14"), gender: "MALE",
     address: "789 River Lane", city: "Austin", state: "TX", zipCode: "73301",
     guardianName: "Maria Garcia", guardianPhone: "+1-512-555-2002", guardianEmail: "maria.g@email.com",
     govtIdType: "PASSPORT", govtIdNumber: "US-8765432",
@@ -335,7 +339,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[2].toString(),
     rollNumber: "RC-002", firstName: "Ava", lastName: "Wilson",
     email: "ava.wilson@student.riverside.edu", phone: "+1-512-555-2003",
-    dateOfBirth: new Date("2005-04-25"), gender: "Female",
+    dateOfBirth: new Date("2005-04-25"), gender: "FEMALE",
     address: "321 College Street", city: "Austin", state: "TX", zipCode: "73301",
     guardianName: "David Wilson", guardianPhone: "+1-512-555-2004", guardianEmail: "david.w@email.com",
     govtIdType: "AADHAAR", govtIdNumber: "8901-2345-6789",
@@ -345,7 +349,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[2].toString(),
     rollNumber: "RC-003", firstName: "Ryan", lastName: "Patel",
     email: "ryan.patel@student.riverside.edu", phone: "+1-512-555-2005",
-    dateOfBirth: new Date("2005-01-08"), gender: "Male",
+    dateOfBirth: new Date("2005-01-08"), gender: "MALE",
     address: "444 Tech Blvd", city: "Austin", state: "TX", zipCode: "73301",
     guardianName: "Priya Patel", guardianPhone: "+1-512-555-2006", guardianEmail: "priya.p@email.com",
     govtIdType: "PAN", govtIdNumber: "FGHIJ5678K",
@@ -356,7 +360,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[2].toString(),
     rollNumber: "RC-004", firstName: "Mason", lastName: "Taylor",
     email: "mason.taylor@student.riverside.edu", phone: "+1-512-555-2007",
-    dateOfBirth: new Date("2004-12-03"), gender: "Male",
+    dateOfBirth: new Date("2004-12-03"), gender: "MALE",
     address: "654 University Blvd", city: "Austin", state: "TX", zipCode: "73301",
     guardianName: "Jennifer Taylor", guardianPhone: "+1-512-555-2008", guardianEmail: "jennifer.t@email.com",
     govtIdType: "VOTER_ID", govtIdNumber: "VOTER-TX-12345",
@@ -366,7 +370,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[2].toString(),
     rollNumber: "RC-005", firstName: "Zoe", lastName: "Kim",
     email: "zoe.kim@student.riverside.edu", phone: "+1-512-555-2009",
-    dateOfBirth: new Date("2005-03-17"), gender: "Female",
+    dateOfBirth: new Date("2005-03-17"), gender: "FEMALE",
     address: "999 Algebra Ave", city: "Austin", state: "TX", zipCode: "73301",
     guardianName: "Min-Jun Kim", guardianPhone: "+1-512-555-2010", guardianEmail: "minjun.k@email.com",
     govtIdType: "PASSPORT", govtIdNumber: "KR-1234567",
@@ -377,7 +381,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[3].toString(),
     rollNumber: "RC-E001", firstName: "Ella", lastName: "Hernandez",
     email: "ella.hernandez@student.riverside.edu", phone: "+1-512-555-2011",
-    dateOfBirth: new Date("2005-08-21"), gender: "Female",
+    dateOfBirth: new Date("2005-08-21"), gender: "FEMALE",
     address: "111 East View", city: "Austin", state: "TX", zipCode: "73344",
     guardianName: "Luis Hernandez", guardianPhone: "+1-512-555-2012", guardianEmail: "luis.h@email.com",
     govtIdType: "AADHAAR", govtIdNumber: "9012-3456-7890",
@@ -387,7 +391,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[3].toString(),
     rollNumber: "RC-E002", firstName: "James", lastName: "Moore",
     email: "james.moore@student.riverside.edu", phone: "+1-512-555-2013",
-    dateOfBirth: new Date("2004-11-09"), gender: "Male",
+    dateOfBirth: new Date("2004-11-09"), gender: "MALE",
     address: "222 Physics Lane", city: "Austin", state: "TX", zipCode: "73344",
     guardianName: "Sandra Moore", guardianPhone: "+1-512-555-2014", guardianEmail: "sandra.m@email.com",
     govtIdType: "DRIVING_LICENSE", govtIdNumber: "DL-TX-54321",
@@ -398,7 +402,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[2].toString(), branchId: branchIds[4].toString(),
     rollNumber: "OW-001", firstName: "Isabella", lastName: "Anderson",
     email: "isabella.anderson@student.oakwood.edu", phone: "+1-503-555-3001",
-    dateOfBirth: new Date("2012-06-18"), gender: "Female",
+    dateOfBirth: new Date("2012-06-18"), gender: "FEMALE",
     address: "900 Oak Terrace", city: "Portland", state: "OR", zipCode: "97201",
     guardianName: "Thomas Anderson", guardianPhone: "+1-503-555-3002", guardianEmail: "thomas.a@email.com",
     govtIdType: "PASSPORT", govtIdNumber: "US-PASS-001",
@@ -408,7 +412,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[2].toString(), branchId: branchIds[4].toString(),
     rollNumber: "OW-002", firstName: "Lucas", lastName: "Thomas",
     email: "lucas.thomas@student.oakwood.edu", phone: "+1-503-555-3003",
-    dateOfBirth: new Date("2012-02-27"), gender: "Male",
+    dateOfBirth: new Date("2012-02-27"), gender: "MALE",
     address: "111 Forest Path", city: "Portland", state: "OR", zipCode: "97201",
     guardianName: "Patricia Thomas", guardianPhone: "+1-503-555-3004", guardianEmail: "patricia.t@email.com",
     govtIdType: "OTHER", govtIdNumber: "SSN-XXX-XX-1234",
@@ -419,7 +423,7 @@ const students = db.students.insertMany([
     arkId: "ARK-STU-" + nanoid(), organizationId: orgIds[2].toString(), branchId: branchIds[4].toString(),
     rollNumber: "OW-003", firstName: "Mia", lastName: "Nakamura",
     email: "mia.nakamura@student.oakwood.edu", phone: "+1-503-555-3005",
-    dateOfBirth: new Date("2011-04-10"), gender: "Female",
+    dateOfBirth: new Date("2011-04-10"), gender: "FEMALE",
     address: "444 Sakura Lane", city: "Portland", state: "OR", zipCode: "97201",
     guardianName: "Hiroshi Nakamura", guardianPhone: "+1-503-555-3006", guardianEmail: "hiroshi.n@email.com",
     govtIdType: "PASSPORT", govtIdNumber: "JP-9876543",
@@ -441,7 +445,7 @@ const facultyResult = db.faculty.insertMany([
     arkId: "ARK-FAC-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
     employeeId: "SA-FAC-001", firstName: "Dr. Margaret", lastName: "Chen",
     email: "margaret.chen@springfield.edu", phone: "+1-217-555-5001",
-    dateOfBirth: new Date("1978-04-10"), gender: "Female",
+    dateOfBirth: new Date("1978-04-10"), gender: "FEMALE",
     address: "200 Faculty Lane", city: "Springfield", state: "IL", zipCode: "62704",
     department: "Science", designation: "Head of Department",
     qualifications: ["Ph.D. Physics", "M.Sc. Physics"], specializations: ["Quantum Mechanics", "Thermodynamics"],
@@ -453,7 +457,7 @@ const facultyResult = db.faculty.insertMany([
     arkId: "ARK-FAC-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
     employeeId: "SA-FAC-002", firstName: "James", lastName: "Patterson",
     email: "james.patterson@springfield.edu", phone: "+1-217-555-5002",
-    dateOfBirth: new Date("1985-09-22"), gender: "Male",
+    dateOfBirth: new Date("1985-09-22"), gender: "MALE",
     address: "305 Teacher Court", city: "Springfield", state: "IL", zipCode: "62704",
     department: "Mathematics", designation: "Senior Teacher",
     qualifications: ["M.Sc. Mathematics", "B.Ed."], specializations: ["Calculus", "Statistics"],
@@ -465,7 +469,7 @@ const facultyResult = db.faculty.insertMany([
     arkId: "ARK-FAC-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
     employeeId: "SA-FAC-003", firstName: "Rachel", lastName: "Adams",
     email: "rachel.adams@springfield.edu", phone: "+1-217-555-5003",
-    dateOfBirth: new Date("1992-03-18"), gender: "Female",
+    dateOfBirth: new Date("1992-03-18"), gender: "FEMALE",
     address: "150 Academic Way", city: "Springfield", state: "IL", zipCode: "62704",
     department: "English", designation: "Teacher",
     qualifications: ["M.A. English", "B.Ed."], specializations: ["Grammar", "Literature"],
@@ -478,7 +482,7 @@ const facultyResult = db.faculty.insertMany([
     arkId: "ARK-FAC-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[1].toString(),
     employeeId: "SA-FAC-004", firstName: "Linda", lastName: "Thompson",
     email: "linda.thompson@springfield.edu", phone: "+1-217-555-5004",
-    dateOfBirth: new Date("1990-01-15"), gender: "Female",
+    dateOfBirth: new Date("1990-01-15"), gender: "FEMALE",
     address: "410 North Road", city: "Springfield", state: "IL", zipCode: "62707",
     department: "English", designation: "Teacher",
     qualifications: ["M.A. English Literature"], specializations: ["Creative Writing"],
@@ -490,7 +494,7 @@ const facultyResult = db.faculty.insertMany([
     arkId: "ARK-FAC-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[1].toString(),
     employeeId: "SA-FAC-005", firstName: "David", lastName: "Nguyen",
     email: "david.nguyen@springfield.edu", phone: "+1-217-555-5005",
-    dateOfBirth: new Date("1987-11-25"), gender: "Male",
+    dateOfBirth: new Date("1987-11-25"), gender: "MALE",
     address: "620 North Blvd", city: "Springfield", state: "IL", zipCode: "62707",
     department: "Science", designation: "Senior Teacher",
     qualifications: ["M.Sc. Chemistry"], specializations: ["Organic Chemistry"],
@@ -503,7 +507,7 @@ const facultyResult = db.faculty.insertMany([
     arkId: "ARK-FAC-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[2].toString(),
     employeeId: "RC-FAC-001", firstName: "Dr. Sarah", lastName: "Mitchell",
     email: "sarah.mitchell@riverside.edu", phone: "+1-512-555-5001",
-    dateOfBirth: new Date("1975-06-20"), gender: "Female",
+    dateOfBirth: new Date("1975-06-20"), gender: "FEMALE",
     address: "100 University Ave", city: "Austin", state: "TX", zipCode: "73301",
     department: "Computer Science", designation: "Professor",
     qualifications: ["Ph.D. Computer Science", "M.S. CS"], specializations: ["Machine Learning", "Algorithms"],
@@ -515,7 +519,7 @@ const facultyResult = db.faculty.insertMany([
     arkId: "ARK-FAC-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[2].toString(),
     employeeId: "RC-FAC-002", firstName: "Prof. Robert", lastName: "Kumar",
     email: "robert.kumar@riverside.edu", phone: "+1-512-555-5002",
-    dateOfBirth: new Date("1980-08-12"), gender: "Male",
+    dateOfBirth: new Date("1980-08-12"), gender: "MALE",
     address: "200 Math Circle", city: "Austin", state: "TX", zipCode: "73301",
     department: "Mathematics", designation: "Associate Professor",
     qualifications: ["Ph.D. Mathematics"], specializations: ["Abstract Algebra", "Number Theory"],
@@ -528,7 +532,7 @@ const facultyResult = db.faculty.insertMany([
     arkId: "ARK-FAC-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[3].toString(),
     employeeId: "RC-FAC-003", firstName: "Dr. Emily", lastName: "Chen",
     email: "emily.chen@riverside.edu", phone: "+1-512-555-5003",
-    dateOfBirth: new Date("1982-03-05"), gender: "Female",
+    dateOfBirth: new Date("1982-03-05"), gender: "FEMALE",
     address: "300 East Science Park", city: "Austin", state: "TX", zipCode: "73344",
     department: "Physics", designation: "Professor",
     qualifications: ["Ph.D. Physics", "M.S. Applied Physics"], specializations: ["Optics", "Quantum Computing"],
@@ -541,7 +545,7 @@ const facultyResult = db.faculty.insertMany([
     arkId: "ARK-FAC-" + nanoid(), organizationId: orgIds[2].toString(), branchId: branchIds[4].toString(),
     employeeId: "OW-FAC-001", firstName: "Patricia", lastName: "O'Brien",
     email: "patricia.obrien@oakwood.edu", phone: "+1-503-555-5001",
-    dateOfBirth: new Date("1988-12-01"), gender: "Female",
+    dateOfBirth: new Date("1988-12-01"), gender: "FEMALE",
     address: "500 Oak Faculty Row", city: "Portland", state: "OR", zipCode: "97201",
     department: "General Studies", designation: "Teacher",
     qualifications: ["M.Ed.", "B.A. Education"], specializations: ["Curriculum Design"],
@@ -553,7 +557,7 @@ const facultyResult = db.faculty.insertMany([
     arkId: "ARK-FAC-" + nanoid(), organizationId: orgIds[2].toString(), branchId: branchIds[4].toString(),
     employeeId: "OW-FAC-002", firstName: "Kenji", lastName: "Tanaka",
     email: "kenji.tanaka@oakwood.edu", phone: "+1-503-555-5002",
-    dateOfBirth: new Date("1991-07-15"), gender: "Male",
+    dateOfBirth: new Date("1991-07-15"), gender: "MALE",
     address: "600 Cedar Blvd", city: "Portland", state: "OR", zipCode: "97201",
     department: "Science", designation: "Teacher",
     qualifications: ["M.Sc. Biology"], specializations: ["Ecology", "Botany"],
@@ -738,28 +742,28 @@ db.faculty_assignments.insertMany([
   // Springfield Main Campus
   // Dr. Margaret Chen → 1st Class A — Science (class teacher + subject)
   {
-    arkId: "ARK-ASGN-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
+    arkId: "ARK-ASN-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
     facultyId: facultyIds[0].toString(), classId: classIds[0].toString(),
     subjectName: "Science", academicYear: "2025-2026",
     assignmentType: "BOTH", status: "ACTIVE", createdAt: now, updatedAt: now
   },
   // James Patterson → 1st Class A — Mathematics
   {
-    arkId: "ARK-ASGN-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
+    arkId: "ARK-ASN-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
     facultyId: facultyIds[1].toString(), classId: classIds[0].toString(),
     subjectName: "Mathematics", academicYear: "2025-2026",
     assignmentType: "SUBJECT_TEACHER", status: "ACTIVE", createdAt: now, updatedAt: now
   },
   // James Patterson → 2nd Class A — Mathematics
   {
-    arkId: "ARK-ASGN-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
+    arkId: "ARK-ASN-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
     facultyId: facultyIds[1].toString(), classId: classIds[1].toString(),
     subjectName: "Mathematics", academicYear: "2025-2026",
     assignmentType: "SUBJECT_TEACHER", status: "ACTIVE", createdAt: now, updatedAt: now
   },
   // Rachel Adams → 2nd Class A — English (ON_LEAVE but assignment still active)
   {
-    arkId: "ARK-ASGN-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
+    arkId: "ARK-ASN-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
     facultyId: facultyIds[2].toString(), classId: classIds[1].toString(),
     subjectName: "English", academicYear: "2025-2026",
     assignmentType: "CLASS_TEACHER", status: "ACTIVE", createdAt: now, updatedAt: now
@@ -767,7 +771,7 @@ db.faculty_assignments.insertMany([
   // Springfield North Campus
   // Linda Thompson → 1st Class A — English
   {
-    arkId: "ARK-ASGN-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[1].toString(),
+    arkId: "ARK-ASN-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[1].toString(),
     facultyId: facultyIds[3].toString(), classId: classIds[4].toString(),
     subjectName: "English", academicYear: "2025-2026",
     assignmentType: "BOTH", status: "ACTIVE", createdAt: now, updatedAt: now
@@ -775,14 +779,14 @@ db.faculty_assignments.insertMany([
   // Riverside Downtown
   // Dr. Sarah Mitchell → CS 101 — Computer Science
   {
-    arkId: "ARK-ASGN-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[2].toString(),
+    arkId: "ARK-ASN-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[2].toString(),
     facultyId: facultyIds[5].toString(), classId: classIds[5].toString(),
     subjectName: "Computer Science", academicYear: "2025-2026",
     assignmentType: "SUBJECT_TEACHER", status: "ACTIVE", createdAt: now, updatedAt: now
   },
   // Prof. Robert Kumar → Math 201 — Mathematics
   {
-    arkId: "ARK-ASGN-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[2].toString(),
+    arkId: "ARK-ASN-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[2].toString(),
     facultyId: facultyIds[6].toString(), classId: classIds[6].toString(),
     subjectName: "Mathematics", academicYear: "2025-2026",
     assignmentType: "SUBJECT_TEACHER", status: "ACTIVE", createdAt: now, updatedAt: now
@@ -790,7 +794,7 @@ db.faculty_assignments.insertMany([
   // Riverside East
   // Dr. Emily Chen → Physics 101 — Physics
   {
-    arkId: "ARK-ASGN-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[3].toString(),
+    arkId: "ARK-ASN-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[3].toString(),
     facultyId: facultyIds[7].toString(), classId: classIds[7].toString(),
     subjectName: "Physics", academicYear: "2025-2026",
     assignmentType: "BOTH", status: "ACTIVE", createdAt: now, updatedAt: now
@@ -798,7 +802,7 @@ db.faculty_assignments.insertMany([
   // Oakwood Central
   // Patricia O'Brien → Year 8 Alpha — General Studies
   {
-    arkId: "ARK-ASGN-" + nanoid(), organizationId: orgIds[2].toString(), branchId: branchIds[4].toString(),
+    arkId: "ARK-ASN-" + nanoid(), organizationId: orgIds[2].toString(), branchId: branchIds[4].toString(),
     facultyId: facultyIds[8].toString(), classId: classIds[8].toString(),
     subjectName: "General Studies", academicYear: "2025-2026",
     assignmentType: "BOTH", status: "ACTIVE", createdAt: now, updatedAt: now
@@ -815,15 +819,15 @@ print("--- Inserting Examinations ---");
 const exams = db.examinations.insertMany([
   // Springfield Main Campus — Final Exam 2025-2026
   {
-    arkId: "ARK-EXAM-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
+    arkId: "ARK-EXM-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
     name: "Final Examination 2025-2026", academicYear: "2025-2026", examType: "FINAL",
     startDate: new Date("2026-03-01"), endDate: new Date("2026-03-15"),
-    description: "Annual final examination for all classes", status: "SCHEDULED",
+    description: "Annual final examination for all classes", status: "COMPLETED",
     createdAt: now, updatedAt: now
   },
   // Springfield Main Campus — Midterm 2025-2026
   {
-    arkId: "ARK-EXAM-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
+    arkId: "ARK-EXM-" + nanoid(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(),
     name: "Midterm Examination 2025-2026", academicYear: "2025-2026", examType: "MIDTERM",
     startDate: new Date("2025-11-01"), endDate: new Date("2025-11-10"),
     description: "Midterm assessment", status: "COMPLETED",
@@ -831,7 +835,7 @@ const exams = db.examinations.insertMany([
   },
   // Riverside Downtown — Final Exam
   {
-    arkId: "ARK-EXAM-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[2].toString(),
+    arkId: "ARK-EXM-" + nanoid(), organizationId: orgIds[1].toString(), branchId: branchIds[2].toString(),
     name: "Spring Final 2025-2026", academicYear: "2025-2026", examType: "FINAL",
     startDate: new Date("2026-04-01"), endDate: new Date("2026-04-10"),
     description: "Spring semester final examination", status: "SCHEDULED",
@@ -839,7 +843,7 @@ const exams = db.examinations.insertMany([
   },
   // Oakwood Central — Final Exam
   {
-    arkId: "ARK-EXAM-" + nanoid(), organizationId: orgIds[2].toString(), branchId: branchIds[4].toString(),
+    arkId: "ARK-EXM-" + nanoid(), organizationId: orgIds[2].toString(), branchId: branchIds[4].toString(),
     name: "Annual Examination 2025-2026", academicYear: "2025-2026", examType: "FINAL",
     startDate: new Date("2026-03-10"), endDate: new Date("2026-03-20"),
     description: "Annual examination for Year 8 and Year 9", status: "SCHEDULED",
@@ -857,9 +861,9 @@ print("--- Inserting Exam Subjects ---");
 
 const examSubjects = db.exam_subjects.insertMany([
   // Springfield Final Exam — 1st Class A subjects
-  { examinationId: examIds[0].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[0].toString(), subjectName: "Mathematics", subjectCode: "MATH-1A", maxMarks: 100, passingMarks: 35, examDate: new Date("2026-03-02"), status: "SCHEDULED", createdAt: now, updatedAt: now },
-  { examinationId: examIds[0].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[0].toString(), subjectName: "Science", subjectCode: "SCI-1A", maxMarks: 100, passingMarks: 35, examDate: new Date("2026-03-04"), status: "SCHEDULED", createdAt: now, updatedAt: now },
-  { examinationId: examIds[0].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[0].toString(), subjectName: "English", subjectCode: "ENG-1A", maxMarks: 100, passingMarks: 35, examDate: new Date("2026-03-06"), status: "SCHEDULED", createdAt: now, updatedAt: now },
+  { examinationId: examIds[0].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[0].toString(), subjectName: "Mathematics", subjectCode: "MATH-1A", maxMarks: 100, passingMarks: 35, examDate: new Date("2026-03-02"), status: "COMPLETED", createdAt: now, updatedAt: now },
+  { examinationId: examIds[0].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[0].toString(), subjectName: "Science", subjectCode: "SCI-1A", maxMarks: 100, passingMarks: 35, examDate: new Date("2026-03-04"), status: "COMPLETED", createdAt: now, updatedAt: now },
+  { examinationId: examIds[0].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[0].toString(), subjectName: "English", subjectCode: "ENG-1A", maxMarks: 100, passingMarks: 35, examDate: new Date("2026-03-06"), status: "COMPLETED", createdAt: now, updatedAt: now },
   // Springfield Final Exam — 2nd Class A subjects
   { examinationId: examIds[0].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[1].toString(), subjectName: "Mathematics", subjectCode: "MATH-2A", maxMarks: 100, passingMarks: 40, examDate: new Date("2026-03-02"), status: "SCHEDULED", createdAt: now, updatedAt: now },
   { examinationId: examIds[0].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[1].toString(), subjectName: "English", subjectCode: "ENG-2A", maxMarks: 100, passingMarks: 40, examDate: new Date("2026-03-06"), status: "SCHEDULED", createdAt: now, updatedAt: now },
@@ -883,11 +887,24 @@ const subjectIds = Object.values(examSubjects.insertedIds);
 print(`Inserted ${subjectIds.length} exam subjects`);
 
 // =============================================================
-// 12. Exam Results (midterm results for Springfield 1st Class A)
+// 12. Exam Results (FINAL + midterm results for Springfield 1st Class A)
 // =============================================================
 print("--- Inserting Exam Results ---");
 
 db.exam_results.insertMany([
+  // FINAL exam (examIds[0]) — Springfield 1st Class A, subjects 0 (Math), 1 (Science), 2 (English), max 100, pass 35
+  // Emma Johnson passes everything -> recommended PROMOTE
+  { examinationId: examIds[0].toString(), examSubjectId: subjectIds[0].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[0].toString(), studentId: studentIds[0].toString(), marksObtained: 92, grade: "A+", remarks: "Excellent", status: "PASS", createdAt: now, updatedAt: now },
+  { examinationId: examIds[0].toString(), examSubjectId: subjectIds[1].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[0].toString(), studentId: studentIds[0].toString(), marksObtained: 85, grade: "A", remarks: "Very good", status: "PASS", createdAt: now, updatedAt: now },
+  { examinationId: examIds[0].toString(), examSubjectId: subjectIds[2].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[0].toString(), studentId: studentIds[0].toString(), marksObtained: 88, grade: "A", remarks: "Very good", status: "PASS", createdAt: now, updatedAt: now },
+  // Liam Williams fails English -> recommended HOLD_BACK
+  { examinationId: examIds[0].toString(), examSubjectId: subjectIds[0].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[0].toString(), studentId: studentIds[1].toString(), marksObtained: 61, grade: "B", remarks: "Good", status: "PASS", createdAt: now, updatedAt: now },
+  { examinationId: examIds[0].toString(), examSubjectId: subjectIds[1].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[0].toString(), studentId: studentIds[1].toString(), marksObtained: 48, grade: "C", remarks: "Fair", status: "PASS", createdAt: now, updatedAt: now },
+  { examinationId: examIds[0].toString(), examSubjectId: subjectIds[2].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[0].toString(), studentId: studentIds[1].toString(), marksObtained: 28, grade: "F", remarks: "Below passing marks", status: "FAIL", createdAt: now, updatedAt: now },
+  // Aiden Clark was absent for Math, fails Science, no English result -> HOLD_BACK
+  { examinationId: examIds[0].toString(), examSubjectId: subjectIds[0].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[0].toString(), studentId: studentIds[2].toString(), remarks: "Absent", status: "ABSENT", createdAt: now, updatedAt: now },
+  { examinationId: examIds[0].toString(), examSubjectId: subjectIds[1].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[0].toString(), studentId: studentIds[2].toString(), marksObtained: 22, grade: "F", remarks: "Below passing marks", status: "FAIL", createdAt: now, updatedAt: now },
+
   // Midterm — Mathematics (subject index 7) — students 0,1,2
   // Emma Johnson — 45/50 PASS
   { examinationId: examIds[1].toString(), examSubjectId: subjectIds[7].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[0].toString(), studentId: studentIds[0].toString(), marksObtained: 45, grade: "A+", remarks: "Excellent performance", status: "PASS", createdAt: now, updatedAt: now },
@@ -905,37 +922,42 @@ db.exam_results.insertMany([
   { examinationId: examIds[1].toString(), examSubjectId: subjectIds[8].toString(), organizationId: orgIds[0].toString(), branchId: branchIds[0].toString(), classId: classIds[0].toString(), studentId: studentIds[2].toString(), marksObtained: 10, grade: "F", remarks: "Significant improvement needed", status: "FAIL", createdAt: now, updatedAt: now }
 ]);
 
-print("Inserted 6 exam results");
+print(`Inserted ${db.exam_results.countDocuments()} exam results`);
 
 // =============================================================
-// 13. Indexes (ensure required compound indexes)
+// 12b. Catalogs: academic years and subjects
 // =============================================================
-print("--- Creating Indexes ---");
+print("--- Inserting Academic Years and Subjects ---");
+orgIds.forEach(orgId => {
+  db.academic_years.insertMany([
+    { organizationId: orgId.toString(), label: "2025-2026", startDate: new Date("2025-06-01"), endDate: new Date("2026-05-31"), current: true, createdAt: now, updatedAt: now },
+    { organizationId: orgId.toString(), label: "2026-2027", startDate: new Date("2026-06-01"), endDate: new Date("2027-05-31"), current: false, createdAt: now, updatedAt: now }
+  ]);
+  db.subjects.insertMany([
+    { organizationId: orgId.toString(), code: "MATH", name: "Mathematics", createdAt: now, updatedAt: now },
+    { organizationId: orgId.toString(), code: "SCI", name: "Science", createdAt: now, updatedAt: now },
+    { organizationId: orgId.toString(), code: "ENG", name: "English", createdAt: now, updatedAt: now }
+  ]);
+});
 
-db.organizations.createIndex({ arkId: 1 }, { unique: true });
-db.organizations.createIndex({ name: 1 }, { unique: true });
-db.branches.createIndex({ arkId: 1 }, { unique: true });
-db.branches.createIndex({ organizationId: 1, name: 1 }, { unique: true });
-db.academic_classes.createIndex({ organizationId: 1, branchId: 1, name: 1, section: 1, academicYear: 1 }, { unique: true, name: "org_branch_class_name_section_year" });
-db.students.createIndex({ arkId: 1 }, { unique: true });
-db.faculty.createIndex({ arkId: 1 }, { unique: true });
-db.users.createIndex({ organizationId: 1, email: 1 }, { unique: true, name: "org_email_idx" });
-db.student_enrollments.createIndex({ studentId: 1, academicYear: 1 }, { unique: true, name: "student_year_unique" });
-db.student_enrollments.createIndex({ organizationId: 1, classId: 1, status: 1 }, { name: "org_class_status" });
-db.student_enrollments.createIndex({ studentId: 1, status: 1 }, { name: "student_status" });
-db.student_enrollments.createIndex({ organizationId: 1, branchId: 1, academicYear: 1 }, { name: "org_branch_year" });
-db.faculty_assignments.createIndex({ arkId: 1 }, { unique: true });
-db.faculty_assignments.createIndex({ facultyId: 1, classId: 1, subjectName: 1, academicYear: 1 }, { unique: true, name: "faculty_class_subject_year_unique" });
-db.exam_subjects.createIndex({ examinationId: 1, subjectName: 1, classId: 1 }, { unique: true, name: "exam_subject_unique" });
-db.exam_results.createIndex({ examSubjectId: 1, studentId: 1 }, { unique: true, name: "result_unique" });
-db.exam_results.createIndex({ examinationId: 1, studentId: 1 }, { name: "exam_student" });
-db.examinations.createIndex({ arkId: 1 }, { unique: true });
-db.examinations.createIndex({ organizationId: 1, branchId: 1, academicYear: 1, name: 1 }, { unique: true, name: "org_branch_year_name" });
-db.class_progressions.createIndex({ organizationId: 1, branchId: 1 }, { unique: true, name: "org_branch_unique" });
-db.audit_logs.createIndex({ organizationId: 1, timestamp: -1 }, { name: "org_timestamp_idx" });
-db.audit_logs.createIndex({ timestamp: 1 }, { name: "timestamp_idx" });
+// Link records to the catalog entries (same as migration 004-backfill-catalog-ids)
+db.academic_years.find().forEach(y => {
+  ["academic_classes", "student_enrollments", "examinations", "faculty_assignments"].forEach(c => {
+    db.getCollection(c).updateMany({ organizationId: y.organizationId, academicYear: y.label }, { $set: { academicYearId: y._id.toString() } });
+  });
+});
+db.subjects.find().forEach(sub => {
+  ["exam_subjects", "faculty_assignments"].forEach(c => {
+    db.getCollection(c).updateMany({ organizationId: sub.organizationId, subjectName: sub.name }, { $set: { subjectId: sub._id.toString() } });
+  });
+});
 
-print("Indexes created");
+// =============================================================
+// 13. Indexes
+// =============================================================
+// Indexes are created and owned by the application (see the @CompoundIndex/@Indexed annotations and
+// MongoConfig); creating them here under different names would make the application's index creation clash.
+print("Indexes are created by the application on startup");
 
 // =============================================================
 // Summary
@@ -948,13 +970,15 @@ print(`Branches:      ${branchIds.length}`);
 print(`Classes:       ${classIds.length}`);
 print(`Students:      ${studentIds.length}`);
 print(`Faculty:       ${facultyIds.length}`);
-print("Users:         11");
+print(`Users:         ${db.users.countDocuments()}`);
 print(`Enrollments:   ${enrollmentIds.length}`);
-print("Progressions:  3");
-print("Assignments:   9");
+print(`Progressions:  ${db.class_progressions.countDocuments()}`);
+print(`Assignments:   ${db.faculty_assignments.countDocuments()}`);
 print(`Examinations:  ${examIds.length}`);
 print(`Exam Subjects: ${subjectIds.length}`);
-print("Exam Results:  6");
+print(`Exam Results:  ${db.exam_results.countDocuments()}`);
+print(`Academic Yrs:  ${db.academic_years.countDocuments()}`);
+print(`Subjects:      ${db.subjects.countDocuments()}`);
 print("========================================");
 print("\nTest Accounts (password: Password@123):");
 print("  SUPER_ADMIN:  superadmin@ark.platform");
@@ -970,6 +994,8 @@ print("  2. Graduate 3rd Class A (terminal class, 1 student — Sophia Martinez)
 print("  3. Promote Year 8 Alpha → Year 9 Alpha (Oakwood, 2 students)");
 print("  4. Graduate Year 9 Alpha (terminal, 1 student — Mia Nakamura)");
 print("========================================");
+print("\nPromotion preview data (FINAL exam, Springfield 1st Class A):");
+print("  Emma Johnson -> PROMOTE (passes all), Liam Williams -> HOLD_BACK (fails English), Aiden Clark -> HOLD_BACK (absent Math, fails Science)");
 print("\nExam Result Test Scenarios:");
 print("  Midterm results exist for Springfield 1st Class A (3 students, 2 subjects):");
 print("    Emma Johnson:  Math 45/50 PASS, Science 42/50 PASS");

@@ -9,12 +9,11 @@ import com.app.ark_backend_services.model.FacultyAssignment.AssignmentStatus;
 import com.app.ark_backend_services.repository.AcademicClassRepository;
 import com.app.ark_backend_services.repository.FacultyAssignmentRepository;
 import com.app.ark_backend_services.repository.FacultyRepository;
-import com.app.ark_backend_services.security.CurrentUser;
+import com.app.ark_backend_services.security.AccessPolicy;
 import com.app.ark_backend_services.util.ArkIdGenerator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -27,19 +26,25 @@ public class FacultyAssignmentService {
     private final FacultyRepository facultyRepository;
     private final AcademicClassRepository academicClassRepository;
     private final AuditLogService auditLogService;
+    private final CatalogResolver catalogResolver;
 
     public FacultyAssignmentResponse create(String organizationId, String branchId, CreateFacultyAssignmentRequest request) {
-        validateOrgAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
+        AccessPolicy.assertBranch(branchId);
 
-        facultyRepository.findByIdAndOrganizationId(request.getFacultyId(), organizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Faculty not found: " + request.getFacultyId()));
+        var year = catalogResolver.year(organizationId, request.getAcademicYearId(), request.getAcademicYear());
+        request.setAcademicYear(year.label());
+        var subject = catalogResolver.subject(organizationId, request.getSubjectId(), request.getSubjectName(), false);
+        request.setSubjectName(subject.name());
+        loadFacultyInBranch(organizationId, branchId, request.getFacultyId());
 
-        academicClassRepository.findById(request.getClassId())
+        // The class must exist in this organization AND this branch
+        academicClassRepository.findByIdAndOrganizationIdAndBranchId(request.getClassId(), organizationId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found: " + request.getClassId()));
 
         String subjectName = request.getSubjectName() != null ? request.getSubjectName() : "";
-        if (assignmentRepository.existsByFacultyIdAndClassIdAndSubjectNameAndAcademicYear(
-                request.getFacultyId(), request.getClassId(), subjectName, request.getAcademicYear())) {
+        if (assignmentRepository.existsByOrganizationIdAndFacultyIdAndClassIdAndSubjectNameAndAcademicYear(
+                organizationId, request.getFacultyId(), request.getClassId(), subjectName, request.getAcademicYear())) {
             throw new DuplicateResourceException("Faculty already assigned to this class/subject for academic year " + request.getAcademicYear());
         }
 
@@ -50,7 +55,9 @@ public class FacultyAssignmentService {
         assignment.setFacultyId(request.getFacultyId());
         assignment.setClassId(request.getClassId());
         assignment.setSubjectName(subjectName);
+        assignment.setSubjectId(subject.id());
         assignment.setAcademicYear(request.getAcademicYear());
+        assignment.setAcademicYearId(year.id());
         assignment.setAssignmentType(request.getAssignmentType());
         assignment.setStatus(AssignmentStatus.ACTIVE);
 
@@ -61,43 +68,50 @@ public class FacultyAssignmentService {
         return response;
     }
 
-    public FacultyAssignmentResponse getById(String organizationId, String assignmentId) {
-        validateOrgAccess(organizationId);
-        FacultyAssignment assignment = assignmentRepository.findByIdAndOrganizationId(assignmentId, organizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Assignment not found: " + assignmentId));
-        return FacultyAssignmentResponse.from(assignment);
+    public FacultyAssignmentResponse getById(String organizationId, String branchId, String assignmentId) {
+        AccessPolicy.assertOrg(organizationId);
+        AccessPolicy.assertBranch(branchId);
+        return FacultyAssignmentResponse.from(loadAssignment(organizationId, branchId, assignmentId));
     }
 
-    public List<FacultyAssignmentResponse> getActiveByFaculty(String organizationId, String facultyId) {
-        validateOrgAccess(organizationId);
-        return assignmentRepository.findByFacultyIdAndStatus(facultyId, AssignmentStatus.ACTIVE)
-                .stream()
+    public List<FacultyAssignmentResponse> getActiveByFaculty(String organizationId, String branchId, String facultyId) {
+        AccessPolicy.assertOrg(organizationId);
+        AccessPolicy.assertBranch(branchId);
+        loadFacultyInBranch(organizationId, branchId, facultyId);
+        return assignmentRepository.findByOrganizationIdAndFacultyIdAndStatus(organizationId, facultyId, AssignmentStatus.ACTIVE, org.springframework.data.domain.PageRequest.of(0, 200))
+                .getContent().stream()
                 .map(FacultyAssignmentResponse::from)
                 .toList();
     }
 
-    public Page<FacultyAssignmentResponse> getAllByFaculty(String organizationId, String facultyId, Pageable pageable) {
-        validateOrgAccess(organizationId);
-        return assignmentRepository.findByFacultyId(facultyId, pageable)
+    public Page<FacultyAssignmentResponse> getAllByFaculty(String organizationId, String branchId, String facultyId, Pageable pageable) {
+        AccessPolicy.assertOrg(organizationId);
+        AccessPolicy.assertBranch(branchId);
+        loadFacultyInBranch(organizationId, branchId, facultyId);
+        return assignmentRepository.findByOrganizationIdAndFacultyId(organizationId, facultyId, pageable)
                 .map(FacultyAssignmentResponse::from);
     }
 
-    public Page<FacultyAssignmentResponse> getByClassAndYear(String organizationId, String classId, String academicYear, Pageable pageable) {
-        validateOrgAccess(organizationId);
+    public Page<FacultyAssignmentResponse> getByClassAndYear(String organizationId, String branchId, String classId, String academicYear, Pageable pageable) {
+        AccessPolicy.assertOrg(organizationId);
+        AccessPolicy.assertBranch(branchId);
+        academicClassRepository.findByIdAndOrganizationIdAndBranchId(classId, organizationId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class not found: " + classId));
         return assignmentRepository.findByOrganizationIdAndClassIdAndAcademicYear(organizationId, classId, academicYear, pageable)
                 .map(FacultyAssignmentResponse::from);
     }
 
     public Page<FacultyAssignmentResponse> getByBranchAndYear(String organizationId, String branchId, String academicYear, Pageable pageable) {
-        validateOrgAccess(organizationId);
+        AccessPolicy.assertOrg(organizationId);
+        AccessPolicy.assertBranch(branchId);
         return assignmentRepository.findByOrganizationIdAndBranchIdAndAcademicYear(organizationId, branchId, academicYear, pageable)
                 .map(FacultyAssignmentResponse::from);
     }
 
-    public FacultyAssignmentResponse update(String organizationId, String assignmentId, UpdateFacultyAssignmentRequest request) {
-        validateOrgAccess(organizationId);
-        FacultyAssignment assignment = assignmentRepository.findByIdAndOrganizationId(assignmentId, organizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Assignment not found: " + assignmentId));
+    public FacultyAssignmentResponse update(String organizationId, String branchId, String assignmentId, UpdateFacultyAssignmentRequest request) {
+        AccessPolicy.assertOrg(organizationId);
+        AccessPolicy.assertBranch(branchId);
+        FacultyAssignment assignment = loadAssignment(organizationId, branchId, assignmentId);
 
         if (request.getAssignmentType() != null) {
             assignment.setAssignmentType(request.getAssignmentType());
@@ -112,18 +126,23 @@ public class FacultyAssignmentService {
         return response;
     }
 
-    public void delete(String organizationId, String assignmentId) {
-        validateOrgAccess(organizationId);
-        FacultyAssignment assignment = assignmentRepository.findByIdAndOrganizationId(assignmentId, organizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Assignment not found: " + assignmentId));
+    public void delete(String organizationId, String branchId, String assignmentId) {
+        AccessPolicy.assertOrg(organizationId);
+        AccessPolicy.assertBranch(branchId);
+        FacultyAssignment assignment = loadAssignment(organizationId, branchId, assignmentId);
+        assignmentRepository.delete(assignment);
         auditLogService.log(Action.DELETE, "FacultyAssignment", assignmentId,
                 "Assignment for faculty " + assignment.getFacultyId(), organizationId, "Assignment deleted");
-        assignmentRepository.delete(assignment);
     }
 
-    private void validateOrgAccess(String organizationId) {
-        if (!CurrentUser.belongsToOrg(organizationId)) {
-            throw new AccessDeniedException("You do not have access to this organization");
-        }
+    private FacultyAssignment loadAssignment(String organizationId, String branchId, String assignmentId) {
+        return assignmentRepository.findByIdAndOrganizationIdAndBranchId(assignmentId, organizationId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Assignment not found: " + assignmentId));
+    }
+
+    private void loadFacultyInBranch(String organizationId, String branchId, String facultyId) {
+        facultyRepository.findByIdAndOrganizationId(facultyId, organizationId)
+                .filter(f -> branchId.equals(f.getBranchId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Faculty not found: " + facultyId));
     }
 }

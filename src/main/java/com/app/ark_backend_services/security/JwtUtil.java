@@ -12,78 +12,53 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
 
+/**
+ * Issues and parses short-lived access tokens. Claims: sub (userId), role, org, branch,
+ * ver (user token version), typ ("access"). Refresh tokens are opaque and handled by AuthService.
+ */
 @Component
 public class JwtUtil {
 
+    public static final String TYPE_ACCESS = "access";
+
     private final SecretKey key;
-    private final long accessTokenExpiration;
-    private final long refreshTokenExpiration;
+    private final long accessTokenExpirationMs;
 
     public JwtUtil(
             @Value("${app.jwt.secret}") String secret,
-            @Value("${app.jwt.access-token-expiration:3600000}") long accessTokenExpiration,
-            @Value("${app.jwt.refresh-token-expiration:604800000}") long refreshTokenExpiration) {
+            @Value("${app.jwt.access-token-expiration:1800000}") long accessTokenExpirationMs) {
+        if (secret == null || secret.length() < 32) {
+            throw new IllegalStateException("app.jwt.secret (JWT_SECRET) must be at least 32 characters");
+        }
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-        this.accessTokenExpiration = accessTokenExpiration;
-        this.refreshTokenExpiration = refreshTokenExpiration;
+        this.accessTokenExpirationMs = accessTokenExpirationMs;
     }
 
     public String generateAccessToken(User user) {
-        return buildToken(user, accessTokenExpiration, "access");
-    }
-
-    public String generateRefreshToken(User user) {
-        return buildToken(user, refreshTokenExpiration, "refresh");
-    }
-
-    private String buildToken(User user, long expiration, String tokenType) {
         Instant now = Instant.now();
         var builder = Jwts.builder()
                 .subject(user.getId())
-                .claim("email", user.getEmail())
                 .claim("role", user.getRole().name())
-                .claim("type", tokenType)
+                .claim("ver", user.getTokenVersion())
+                .claim("typ", TYPE_ACCESS)
                 .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plusMillis(expiration)))
+                .expiration(Date.from(now.plusMillis(accessTokenExpirationMs)))
                 .signWith(key);
-
         if (user.getOrganizationId() != null) {
-            builder.claim("organizationId", user.getOrganizationId());
+            builder.claim("org", user.getOrganizationId());
         }
-
+        if (user.getBranchId() != null) {
+            builder.claim("branch", user.getBranchId());
+        }
         return builder.compact();
     }
 
-    public Claims parseToken(String token) {
-        return Jwts.parser()
-                .verifyWith(key)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
+    /** Parses and verifies signature and expiry. Throws JwtException (ExpiredJwtException when expired). */
+    public Claims parse(String token) {
+        return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
     }
 
-    public boolean isValid(String token) {
-        try {
-            Claims claims = parseToken(token);
-            return claims.getExpiration().after(new Date());
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    public String getUserId(String token) {
-        return parseToken(token).getSubject();
-    }
-
-    public String getRole(String token) {
-        return parseToken(token).get("role", String.class);
-    }
-
-    public String getOrganizationId(String token) {
-        return parseToken(token).get("organizationId", String.class);
-    }
-
-    public String getTokenType(String token) {
-        return parseToken(token).get("type", String.class);
+    public long getAccessTokenTtlSeconds() {
+        return accessTokenExpirationMs / 1000;
     }
 }

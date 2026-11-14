@@ -17,6 +17,7 @@ public class ExaminationResponse {
     private String branchId;
     private String name;
     private String academicYear;
+    private String academicYearId;
     private ExamType examType;
     private LocalDate startDate;
     private LocalDate endDate;
@@ -33,6 +34,7 @@ public class ExaminationResponse {
         response.setBranchId(exam.getBranchId());
         response.setName(exam.getName());
         response.setAcademicYear(exam.getAcademicYear());
+        response.setAcademicYearId(exam.getAcademicYearId());
         response.setExamType(exam.getExamType());
         response.setStartDate(exam.getStartDate());
         response.setEndDate(exam.getEndDate());

@@ -16,8 +16,13 @@ public class CreateFacultyAssignmentRequest {
 
     private String subjectName;
 
-    @NotBlank(message = "Academic year is required")
     private String academicYear;
+
+    /** Alternative to academicYear: id from the academic year catalog. */
+    private String academicYearId;
+
+    /** Alternative to subjectName: id from the subject catalog. */
+    private String subjectId;
 
     @NotNull(message = "Assignment type is required")
     private AssignmentType assignmentType;

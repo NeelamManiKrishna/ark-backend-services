@@ -40,16 +40,15 @@ public class SecurityConfig {
             )
             .authorizeHttpRequests(auth -> auth
                 // Public endpoints
-                .requestMatchers("/api/v1/auth/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
                 // Swagger/OpenAPI
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                 // Actuator health
                 .requestMatchers("/actuator/health").permitAll()
                 // CORS preflight
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                // Organization CRUD - Super Admin only (exact path, not sub-resources)
+                // Organization create/delete - Super Admin only (update is role-checked in the controller: SUPER_ADMIN or own-org ORG_ADMIN)
                 .requestMatchers(HttpMethod.POST, "/api/v1/organizations").hasRole("SUPER_ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/api/v1/organizations/{id}").hasRole("SUPER_ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/v1/organizations/{id}").hasRole("SUPER_ADMIN")
                 // All other API endpoints require authentication
                 .requestMatchers("/api/**").authenticated()

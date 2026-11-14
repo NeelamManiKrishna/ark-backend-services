@@ -20,6 +20,9 @@ public class AuditLogResponse {
     private String performedByEmail;
     private String performedByRole;
     private String details;
+    private java.util.Map<String, Object> before;
+    private java.util.Map<String, Object> after;
+    private java.util.List<String> changedFields;
     private Instant timestamp;
 
     public static AuditLogResponse from(AuditLog log) {
@@ -34,6 +37,9 @@ public class AuditLogResponse {
                 .performedByEmail(log.getPerformedByEmail())
                 .performedByRole(log.getPerformedByRole())
                 .details(log.getDetails())
+                .before(log.getBefore())
+                .after(log.getAfter())
+                .changedFields(log.getChangedFields())
                 .timestamp(log.getTimestamp())
                 .build();
     }

@@ -35,6 +35,18 @@ public class ClassProgressionController {
         return ResponseEntity.ok(progressionService.upsert(organizationId, branchId, request));
     }
 
+    @DeleteMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ORG_ADMIN')")
+    @Operation(summary = "Delete class progression", description = "Removes the class progression of a branch. Promotion is unavailable until it is configured again.")
+    @ApiResponse(responseCode = "204", description = "Class progression deleted")
+    @ApiResponse(responseCode = "404", description = "Class progression not configured")
+    public ResponseEntity<Void> delete(
+            @Parameter(description = "Organization ID") @PathVariable String organizationId,
+            @Parameter(description = "Branch ID") @PathVariable String branchId) {
+        progressionService.delete(organizationId, branchId);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN')")
     @Operation(summary = "Get class progression", description = "Returns the configured class progression for a branch. Returns 404 if not yet configured.")
